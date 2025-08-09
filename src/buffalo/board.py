@@ -47,3 +47,16 @@ class Board:
 
     def get_piece_at(self, x: int, y: int) -> Optional[Piece]:
         return self.pieces.get((x, y))
+
+    def move_piece(self, from_x: int, from_y: int, to_x: int, to_y: int) -> bool:
+        piece = self.get_piece_at(from_x, from_y)
+        if not piece:
+            return False
+            
+        # For now, just move the piece without validation
+        self.pieces[(to_x, to_y)] = piece
+        del self.pieces[(from_x, from_y)]
+        
+        # Switch current player
+        self.current_player = Player.HUNTERS if self.current_player == Player.BUFFALO else Player.BUFFALO
+        return True

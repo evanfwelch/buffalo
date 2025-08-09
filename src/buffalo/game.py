@@ -47,6 +47,19 @@ def draw_pieces(screen, font, board):
                 screen.blit(text, text.get_rect(center=center))
 
 
+def get_board_position(pos):
+    x, y = pos
+    return x // SQUARE_SIZE, y // SQUARE_SIZE
+
+
+def draw_selected(screen, pos):
+    x, y = pos
+    rect = pygame.Rect(x * SQUARE_SIZE, y * SQUARE_SIZE, SQUARE_SIZE, SQUARE_SIZE)
+    highlight = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
+    pygame.draw.rect(highlight, (255, 255, 0, 100), highlight.get_rect())
+    screen.blit(highlight, rect)
+
+
 def main(max_frames=None):
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -54,7 +67,8 @@ def main(max_frames=None):
     font = pygame.font.SysFont(None, 36)
     clock = pygame.time.Clock()
     
-    board = Board()  # Create board instance
+    board = Board()
+    selected_pos = None
     
     running = True
     frame = 0
@@ -62,8 +76,24 @@ def main(max_frames=None):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                x, y = get_board_position(event.pos)
+                if selected_pos is None:
+                    # Select piece if it belongs to current player
+                    piece = board.get_piece_at(x, y)
+                    if piece and piece.player == board.current_player:
+                        selected_pos = (x, y)
+                else:
+                    # Try to move piece if destination is clicked
+                    if (x, y) != selected_pos:
+                        from_x, from_y = selected_pos
+                        # TODO: Add move validation here when implemented in Board
+                        board.move_piece(from_x, from_y, x, y)
+                    selected_pos = None
         
         draw_board(screen)
+        if selected_pos:
+            draw_selected(screen, selected_pos)
         draw_pieces(screen, font, board)
         pygame.display.flip()
         clock.tick(30)
