@@ -1,5 +1,6 @@
 import argparse
 import pygame
+from .board import Board, PieceType, Player
 
 BOARD_WIDTH = 11
 BOARD_HEIGHT = 7
@@ -9,6 +10,18 @@ HEIGHT = BOARD_HEIGHT * SQUARE_SIZE
 LIGHT = (240, 217, 181)
 DARK = (181, 136, 99)
 LINE_COLOR = (0, 0, 0)
+
+PIECE_COLORS = {
+    PieceType.BUFFALO: (139, 69, 19),  # Brown
+    PieceType.DOG: (105, 105, 105),    # Gray
+    PieceType.CHIEF: (255, 215, 0),    # Gold
+}
+
+TEXT_COLORS = {
+    PieceType.BUFFALO: (255, 255, 255),  # White
+    PieceType.DOG: (0, 0, 0),           # Black
+    PieceType.CHIEF: (0, 0, 0),         # Black
+}
 
 
 def draw_board(screen):
@@ -22,44 +35,36 @@ def draw_board(screen):
     pygame.draw.line(screen, LINE_COLOR, (0, HEIGHT - SQUARE_SIZE), (WIDTH, HEIGHT - SQUARE_SIZE), 4)
 
 
-def draw_pieces(screen, font):
-    # buffalo pawns on top rank
+def draw_pieces(screen, font, board):
     for x in range(BOARD_WIDTH):
-        center = (x * SQUARE_SIZE + SQUARE_SIZE // 2, SQUARE_SIZE // 2)
-        pygame.draw.circle(screen, (139, 69, 19), center, SQUARE_SIZE // 3)
-        text = font.render("B", True, (255, 255, 255))
-        screen.blit(text, text.get_rect(center=center))
-
-    # dogs on bottom rank
-    dog_positions = [0, 3, 7, 10]
-    for x in dog_positions:
-        center = (x * SQUARE_SIZE + SQUARE_SIZE // 2, HEIGHT - SQUARE_SIZE // 2)
-        pygame.draw.circle(screen, (105, 105, 105), center, SQUARE_SIZE // 3)
-        text = font.render("D", True, (0, 0, 0))
-        screen.blit(text, text.get_rect(center=center))
-
-    # chief at center bottom
-    x = BOARD_WIDTH // 2
-    center = (x * SQUARE_SIZE + SQUARE_SIZE // 2, HEIGHT - SQUARE_SIZE // 2)
-    pygame.draw.circle(screen, (255, 215, 0), center, SQUARE_SIZE // 3)
-    text = font.render("C", True, (0, 0, 0))
-    screen.blit(text, text.get_rect(center=center))
+        for y in range(BOARD_HEIGHT):
+            piece = board.get_piece_at(x, y)
+            if piece:
+                center = (x * SQUARE_SIZE + SQUARE_SIZE // 2, 
+                         y * SQUARE_SIZE + SQUARE_SIZE // 2)
+                pygame.draw.circle(screen, PIECE_COLORS[piece.type], center, SQUARE_SIZE // 3)
+                text = font.render(piece.type.value, True, TEXT_COLORS[piece.type])
+                screen.blit(text, text.get_rect(center=center))
 
 
 def main(max_frames=None):
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
-    pygame.display.set_caption("Buffalo")
+    pygame.display.set_caption("Buffalo!")
     font = pygame.font.SysFont(None, 36)
     clock = pygame.time.Clock()
+    
+    board = Board()  # Create board instance
+    
     running = True
     frame = 0
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+        
         draw_board(screen)
-        draw_pieces(screen, font)
+        draw_pieces(screen, font, board)
         pygame.display.flip()
         clock.tick(30)
         frame += 1
