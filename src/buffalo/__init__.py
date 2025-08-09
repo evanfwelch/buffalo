@@ -1,0 +1,1 @@
+"""Buffalo board game package."""
