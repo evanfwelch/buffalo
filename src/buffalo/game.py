@@ -1,8 +1,9 @@
 import logging
 import argparse
+import time
 import pygame
 from .board import Board, PieceType, Player
-from .bots import NaiveBuffalo
+from .bots import NaiveBuffalo, NaiveHunter
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ def draw_selected(screen, pos):
     screen.blit(highlight, rect)
 
 
-def main(max_frames=None, buffalo_strategy: str = None):
+def main(max_frames=None, buffalo_strategy: str = None, hunter_strategy: str = None):
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("Buffalo!")
@@ -78,19 +79,53 @@ def main(max_frames=None, buffalo_strategy: str = None):
     selected_pos = None
 
     if buffalo_strategy == "naive":
-        pygame.display.set_caption("NAIVE BUFFALO")
+        # current_caption = pygame.display.get_caption()[0]
+        # pygame.display.set_caption(current_caption + " | NAIVE BUFFALO")
         buffalo_bot = NaiveBuffalo(board)
+    
+    if hunter_strategy == "naive":
+        # current_caption = pygame.display.get_caption()[0]
+        # pygame.display.set_caption(current_caption + " | NAIVE HUNTER")
+        hunter_bot = NaiveHunter(board)
 
     running = True
+    started = False
     frame = 0
+    sleep_time = 0.25
     while running:
-        if buffalo_strategy == "naive" and board.current_player == Player.BUFFALO:
 
-            made_move = buffalo_bot.make_move()
+        if not started:
+            for event in pygame.event.get():
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    started = True
 
-            if made_move == False:
-                pygame.display.set_caption("Buffalo's turn - No valid moves -- Chief wins!")
-                pygame.quit()
+
+        if started:
+            if buffalo_strategy == "naive" and board.current_player == Player.BUFFALO:
+
+                made_move = buffalo_bot.make_move()
+
+                time.sleep(sleep_time)
+                
+                    
+
+            if hunter_strategy == "naive" and board.current_player == Player.HUNTERS:
+
+                made_move = hunter_bot.make_move()
+
+                time.sleep(sleep_time)
+                
+
+            # check for winner
+            maybe_winner = board.check_for_winner()
+            if maybe_winner is not None:
+                started = False
+                pygame.display.set_caption(f"YEEHAW: {maybe_winner.name} wins!")
+            
+            elif made_move == False:
+                started = False
+                pygame.display.set_caption("No valid moves -- Game Over!")
+
 
         else:
             # now listen for player events
@@ -129,5 +164,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Buffalo board demo")
     parser.add_argument("--frames", type=int, default=None, help="Number of frames to run (for testing)")
     parser.add_argument("--buffalo-strategy", type=str, default="naive", help="Strategy for the buffalo player (e.g., 'naive')")
+    parser.add_argument("--hunter-strategy", type=str, default="naive", help="Strategy for the hunter player (e.g., 'naive')")
     args = parser.parse_args()
-    main(max_frames=args.frames, buffalo_strategy=args.buffalo_strategy)
+    main(max_frames=args.frames, buffalo_strategy=args.buffalo_strategy, hunter_strategy=args.hunter_strategy)

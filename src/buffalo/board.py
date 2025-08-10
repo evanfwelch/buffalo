@@ -1,6 +1,7 @@
 from enum import Enum
 from dataclasses import dataclass
 from typing import Dict, Tuple, Optional
+import pygame
 
 class Player(Enum):
     BUFFALO = 0
@@ -62,7 +63,8 @@ class Board:
             return False
 
         is_destination_empty = self.get_piece_at(to_x, to_y) is None
-        
+        destination_not_on_bottom_row = to_y != self.height - 1
+
         if piece.type == PieceType.BUFFALO:
             is_one_move_down = (to_y == from_y + 1) and (from_x == to_x)
             
@@ -73,7 +75,7 @@ class Board:
             is_kinglike_move = (delta_x <= 1 and delta_y <= 1)
             piece_at_destination = self.get_piece_at(to_x, to_y)
 
-            return is_kinglike_move and (is_destination_empty or (piece_at_destination and piece_at_destination.player != piece.player))
+            return is_kinglike_move and (is_destination_empty or (piece_at_destination and piece_at_destination.player != piece.player)) and destination_not_on_bottom_row
         
         if piece.type == PieceType.DOG:
             delta_x, delta_y = abs(to_x - from_x), abs(to_y - from_y)
@@ -91,9 +93,19 @@ class Board:
                     curr_x += step_x
                     curr_y += step_y
 
-            return is_queen_like_move and is_destination_empty and no_pieces_between
+            return is_queen_like_move and is_destination_empty and no_pieces_between and destination_not_on_bottom_row
 
         return False
+
+    def check_for_winner(self) -> Optional[Player]:
+        # any buffalo on bottom row
+        for x in range(self.width):
+            piece = self.get_piece_at(x, self.height - 1)
+            if piece is not None:
+                if piece.type == PieceType.BUFFALO:
+                    return Player.BUFFALO
+
+        return None
 
     def move_piece(self, from_x: int, from_y: int, to_x: int, to_y: int) -> bool:
         piece = self.get_piece_at(from_x, from_y)
@@ -108,7 +120,7 @@ class Board:
 
         self.pieces[(to_x, to_y)] = piece
         del self.pieces[(from_x, from_y)]
-        
+
         # Switch current player
         self.switch_player()
         return True
