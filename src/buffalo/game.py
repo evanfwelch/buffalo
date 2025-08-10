@@ -1,12 +1,19 @@
+import logging
 import argparse
 import pygame
 from .board import Board, PieceType, Player
+from .bots import NaiveBuffalo
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 BOARD_WIDTH = 11
 BOARD_HEIGHT = 7
 SQUARE_SIZE = 80
 WIDTH = BOARD_WIDTH * SQUARE_SIZE
 HEIGHT = BOARD_HEIGHT * SQUARE_SIZE
+
+
 LIGHT = (240, 217, 181)
 DARK = (181, 136, 99)
 LINE_COLOR = (0, 0, 0)
@@ -60,7 +67,7 @@ def draw_selected(screen, pos):
     screen.blit(highlight, rect)
 
 
-def main(max_frames=None):
+def main(max_frames=None, buffalo_strategy: str = None):
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("Buffalo!")
@@ -69,28 +76,43 @@ def main(max_frames=None):
     
     board = Board()
     selected_pos = None
-    
+
+    if buffalo_strategy == "naive":
+        pygame.display.set_caption("NAIVE BUFFALO")
+        buffalo_bot = NaiveBuffalo(board)
+
     running = True
     frame = 0
     while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                x, y = get_board_position(event.pos)
-                if selected_pos is None:
-                    # Select piece if it belongs to current player
-                    piece = board.get_piece_at(x, y)
-                    if piece and piece.player == board.current_player:
-                        selected_pos = (x, y)
-                else:
-                    # Try to move piece if destination is clicked
-                    if (x, y) != selected_pos:
-                        from_x, from_y = selected_pos
-                        # TODO: Add move validation here when implemented in Board
-                        board.move_piece(from_x, from_y, x, y)
-                    selected_pos = None
-        
+        if buffalo_strategy == "naive" and board.current_player == Player.BUFFALO:
+
+            made_move = buffalo_bot.make_move()
+
+            if made_move == False:
+                pygame.display.set_caption("Buffalo's turn - No valid moves -- Chief wins!")
+                pygame.quit()
+
+        else:
+            # now listen for player events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    x, y = get_board_position(event.pos)
+                    if selected_pos is None:
+                        # Select piece if it belongs to current player
+                        piece = board.get_piece_at(x, y)
+                        if piece and piece.player == board.current_player:
+                            selected_pos = (x, y)
+                    else:
+                        # Try to move piece if destination is clicked
+                        if (x, y) != selected_pos:
+                            from_x, from_y = selected_pos
+                            # TODO: Add move validation here when implemented in Board
+                            board.move_piece(from_x, from_y, x, y)
+                        selected_pos = None
+                
+
         draw_board(screen)
         if selected_pos:
             draw_selected(screen, selected_pos)
@@ -106,5 +128,6 @@ def main(max_frames=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Buffalo board demo")
     parser.add_argument("--frames", type=int, default=None, help="Number of frames to run (for testing)")
+    parser.add_argument("--buffalo-strategy", type=str, default="naive", help="Strategy for the buffalo player (e.g., 'naive')")
     args = parser.parse_args()
-    main(max_frames=args.frames)
+    main(max_frames=args.frames, buffalo_strategy=args.buffalo_strategy)
