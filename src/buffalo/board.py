@@ -48,15 +48,67 @@ class Board:
     def get_piece_at(self, x: int, y: int) -> Optional[Piece]:
         return self.pieces.get((x, y))
 
+    def switch_player(self):
+        self.current_player = Player.HUNTERS if self.current_player == Player.BUFFALO else Player.BUFFALO
+
+    def _is_destination_inside_board(self, x: int, y: int) -> bool:
+        return 0 <= x < self.width and 0 <= y < self.height
+
+    def _is_valid_move(self, piece: Piece, from_x: int, from_y: int, to_x: int, to_y: int) -> bool:
+        assert piece.player == self.current_player, "Piece does not belong to the current player"
+
+
+        if not self._is_destination_inside_board(to_x, to_y):
+            return False
+
+        is_destination_empty = self.get_piece_at(to_x, to_y) is None
+        
+        if piece.type == PieceType.BUFFALO:
+            is_one_move_down = (to_y == from_y + 1) and (from_x == to_x)
+            
+            return is_one_move_down and is_destination_empty
+        
+        if piece.type == PieceType.CHIEF:
+            delta_x, delta_y = abs(to_x - from_x), abs(to_y - from_y)
+            is_kinglike_move = (delta_x <= 1 and delta_y <= 1)
+            piece_at_destination = self.get_piece_at(to_x, to_y)
+
+            return is_kinglike_move and (is_destination_empty or (piece_at_destination and piece_at_destination.player != piece.player))
+        
+        if piece.type == PieceType.DOG:
+            delta_x, delta_y = abs(to_x - from_x), abs(to_y - from_y)
+            is_queen_like_move = (delta_x == delta_y) or (to_x == from_x) or (to_y == from_y)
+
+            no_pieces_between = True
+            if is_queen_like_move:
+                step_x = 1 if to_x > from_x else -1 if to_x < from_x else 0
+                step_y = 1 if to_y > from_y else -1 if to_y < from_y else 0
+                curr_x, curr_y = from_x + step_x, from_y + step_y
+                while (curr_x, curr_y) != (to_x, to_y):
+                    if self.get_piece_at(curr_x, curr_y) is not None:
+                        no_pieces_between = False
+                        break
+                    curr_x += step_x
+                    curr_y += step_y
+
+            return is_queen_like_move and is_destination_empty and no_pieces_between
+
+        return False
+
     def move_piece(self, from_x: int, from_y: int, to_x: int, to_y: int) -> bool:
         piece = self.get_piece_at(from_x, from_y)
         if not piece:
             return False
-            
-        # For now, just move the piece without validation
+        
+        if piece.player != self.current_player:
+            return False
+
+        if not self._is_valid_move(piece, from_x, from_y, to_x, to_y):
+            return False
+
         self.pieces[(to_x, to_y)] = piece
         del self.pieces[(from_x, from_y)]
         
         # Switch current player
-        self.current_player = Player.HUNTERS if self.current_player == Player.BUFFALO else Player.BUFFALO
+        self.switch_player()
         return True
