@@ -1,12 +1,36 @@
 import random
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import List, Tuple
+
 from .board import Board, PieceType, Player, Position
 
 class Bot(ABC):
     def __init__(self, board: Board, player: Player) -> None:
         self.board = board
         self.player = player
+
+    def generate_legal_moves(self) -> List[Tuple[Position, Position]]:
+        """Generate all legal moves for this bot's player.
+
+        Uses the board's existing move validation logic to enumerate
+        moves without mutating the board state.
+        """
+
+        assert (
+            self.board.current_player == self.player
+        ), "Bot can only generate moves on its turn"
+
+        legal_moves: List[Tuple[Position, Position]] = []
+        for (from_x, from_y), piece in self.board.pieces.items():
+            if piece.player != self.player:
+                continue
+            for to_x in range(self.board.width):
+                for to_y in range(self.board.height):
+                    if self.board._is_valid_move(piece, from_x, from_y, to_x, to_y):
+                        legal_moves.append(
+                            (Position(from_x, from_y), Position(to_x, to_y))
+                        )
+        return legal_moves
 
     @abstractmethod
     def make_move(self) -> bool:
