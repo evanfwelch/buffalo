@@ -35,7 +35,14 @@ class BoardStateEncoder:
             PieceType.DOG,
             PieceType.CHIEF,
         ]
-        self.state_size = board_width * board_height * len(self.piece_types)
+        # +1 for player turn state
+        self.state_size = board_width * board_height * len(self.piece_types) + 1
+
+    def encode_player_turn(self, player: Player) -> torch.Tensor:
+        """Return a one-hot encoded representation of the current player."""
+        encoding = torch.zeros(len(Player), dtype=torch.float32)
+        encoding[player.value] = 1.0
+        return encoding
 
     def encode(self, board: Board) -> torch.Tensor:
         """Return a one-hot encoded representation of ``board``.
@@ -51,6 +58,7 @@ class BoardStateEncoder:
             type_index = self.piece_types.index(piece.type)
             index = square_index * len(self.piece_types) + type_index
             state[index] = 1.0
+        state[-1] = 1.0 if board.current_player == Player.HUNTERS else 0.0
         return state
 
 
@@ -142,7 +150,6 @@ def compute_reward(board: Board, player: Player) -> float:
 @dataclass
 class DQNAgent:
     """Minimal Deep Q-learning agent."""
-
     state_size: int
     action_size: int = 4
     gamma: float = 0.99
