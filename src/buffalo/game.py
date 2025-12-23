@@ -1,8 +1,8 @@
-import argparse
 import logging
 from typing import Optional, Tuple
 
 import arcade
+import click
 
 from .board import Board, PieceType, Player
 from .bots import NaiveBuffalo, NaiveHunter
@@ -183,6 +183,20 @@ class GameWindow(arcade.Window):
             self.set_caption("No valid moves -- Game Over!")
 
 
+@click.command()
+@click.option("--frames", "max_frames", type=int, default=None, help="Number of frames to run (for testing)")
+@click.option(
+    "--buffalo-strategy",
+    type=str,
+    default="naive",
+    help="Strategy for the buffalo player (e.g., 'naive')",
+)
+@click.option(
+    "--hunter-strategy",
+    type=str,
+    default="naive",
+    help="Strategy for the hunter player (e.g., 'naive')",
+)
 def main(max_frames=None, buffalo_strategy: str = None, hunter_strategy: str = None) -> None:
     GameWindow(
         max_frames=max_frames,
@@ -193,23 +207,4 @@ def main(max_frames=None, buffalo_strategy: str = None, hunter_strategy: str = N
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Buffalo board demo")
-    parser.add_argument("--frames", type=int, default=None, help="Number of frames to run (for testing)")
-    parser.add_argument(
-        "--buffalo-strategy",
-        type=str,
-        default="naive",
-        help="Strategy for the buffalo player (e.g., 'naive')",
-    )
-    parser.add_argument(
-        "--hunter-strategy",
-        type=str,
-        default="naive",
-        help="Strategy for the hunter player (e.g., 'naive')",
-    )
-    args = parser.parse_args()
-    main(
-        max_frames=args.frames,
-        buffalo_strategy=args.buffalo_strategy,
-        hunter_strategy=args.hunter_strategy,
-    )
+    main()
