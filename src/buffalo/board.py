@@ -1,7 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass
 from typing import Dict, Tuple, Optional
-import pygame
 
 class Player(Enum):
     BUFFALO = 0

@@ -1,26 +1,24 @@
-[tool.poetry]
+[project]
 name = "buffalo"
 version = "0.1.0"
-description = "Buffalo board game prototype"
-authors = ["Your Name <you@example.com>"]
-packages = [{include = "buffalo", from = "src"}]
+description = ""
+authors = [
+    {name = "Evan Welch",email = "evanfwelch@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "torch (>=2.9.1,<3.0.0)",
+    "arcade (>=3.3.3,<4.0.0)"
+]
 
-[tool.poetry.dependencies]
-python = "^3.11"
-pygame = "^2.5"
-autopep8 = "^2.3.2"
-black = "^25.1.0"
-torch = "^2.1"
-
-[tool.poetry.dev-dependencies]
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.autopep8]
-max_line_length = 120
+[tool.poetry]
+packages = [{include = "buffalo", from = "src"}]
 
-
-[tool.black]
-line-length = 119
+[tool.pytest.ini_options]
+pythonpath = ["src"]
