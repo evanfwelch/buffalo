@@ -1,210 +1,240 @@
-import logging
-from typing import Optional, Tuple
+"""Core game loop and move history for Buffalo."""
 
-import arcade
-import click
+from __future__ import annotations
 
-from .board import Board, PieceType, Player
-from .bots import NaiveBuffalo, NaiveHunter
+from dataclasses import dataclass
+from typing import Iterable, List, Optional, Protocol
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
-
-BOARD_WIDTH = 11
-BOARD_HEIGHT = 7
-SQUARE_SIZE = 80
-WIDTH = BOARD_WIDTH * SQUARE_SIZE
-HEIGHT = BOARD_HEIGHT * SQUARE_SIZE
+from .board import Board, Move, PieceType, Player, Position
 
 
-LIGHT = (240, 217, 181)
-DARK = (181, 136, 99)
-LINE_COLOR = (0, 0, 0)
-
-PIECE_COLORS = {
-    PieceType.BUFFALO: (139, 69, 19),  # Brown
-    PieceType.DOG: (105, 105, 105),  # Gray
-    PieceType.CHIEF: (255, 215, 0),  # Gold
-}
-
-TEXT_COLORS = {
-    PieceType.BUFFALO: (255, 255, 255),  # White
-    PieceType.DOG: (0, 0, 0),  # Black
-    PieceType.CHIEF: (0, 0, 0),  # Black
-}
+class PlayerController(Protocol):
+    def choose_move(self, game: "Game") -> Optional[Move]:
+        """Return a legal move for the current player, or None if no move."""
 
 
-def to_screen_center(x: int, y: int) -> Tuple[float, float]:
-    return (
-        x * SQUARE_SIZE + SQUARE_SIZE / 2,
-        HEIGHT - (y * SQUARE_SIZE + SQUARE_SIZE / 2),
-    )
+@dataclass(frozen=True)
+class MoveRecord:
+    move_number: int
+    player: Player
+    piece_type: Optional[PieceType]
+    from_pos: Optional[Position]
+    to_pos: Optional[Position]
+    board_before: str
+    board_after: str
+    captured_piece: Optional[PieceType]
+    legal_moves: int
+    move_made: bool
+    game_over: bool
+    winner: Optional[Player]
+    game_over_reason: str
 
 
-def to_board_position(screen_x: float, screen_y: float) -> Tuple[int, int]:
-    return (
-        int(screen_x // SQUARE_SIZE),
-        int((HEIGHT - screen_y) // SQUARE_SIZE),
-    )
+class Game:
+    """Manages turn-taking, legal moves, and game history."""
 
-
-class GameWindow(arcade.Window):
     def __init__(
         self,
-        max_frames: Optional[int] = None,
-        buffalo_strategy: Optional[str] = None,
-        hunter_strategy: Optional[str] = None,
+        buffalo_controller: Optional[PlayerController] = None,
+        hunter_controller: Optional[PlayerController] = None,
+        board: Optional[Board] = None,
     ) -> None:
-        super().__init__(WIDTH, HEIGHT, "Buffalo!")
-        self.board = Board()
-        self.selected_pos: Optional[Tuple[int, int]] = None
-        self.buffalo_strategy = buffalo_strategy
-        self.hunter_strategy = hunter_strategy
-        self.buffalo_bot = NaiveBuffalo(self.board) if buffalo_strategy == "naive" else None
-        self.hunter_bot = NaiveHunter(self.board) if hunter_strategy == "naive" else None
-        self.started = False
-        self.frame = 0
-        self.max_frames = max_frames
-        self.bot_delay = 0.25
-        self.bot_elapsed = 0.0
+        self.board = board or Board()
+        self.buffalo_controller = buffalo_controller
+        self.hunter_controller = hunter_controller
+        self.history: List[MoveRecord] = []
+        self.move_number = 0
+        self.game_over = False
+        self.winner: Optional[Player] = None
+        self.game_over_reason = ""
 
-    def on_draw(self) -> None:
-        self.clear()
-        self.draw_board()
-        if self.selected_pos:
-            self.draw_selected(self.selected_pos)
-        self.draw_pieces()
+    def controller_for_current_player(self) -> Optional[PlayerController]:
+        if self.board.current_player == Player.BUFFALO:
+            return self.buffalo_controller
+        return self.hunter_controller
 
-    def on_update(self, delta_time: float) -> None:
-        if not self.started:
-            return
+    def legal_moves(self) -> List[Move]:
+        return self.board.legal_moves()
 
-        self.frame += 1
-        if self.max_frames and self.frame >= self.max_frames:
-            self.close()
-            return
+    def step(self) -> Optional[MoveRecord]:
+        """Advance the game using the configured controller for the current player."""
 
-        current_player = self.board.current_player
-        bot = self._bot_for_player(current_player)
-        if bot is not None:
-            self.bot_elapsed += delta_time
-            if self.bot_elapsed < self.bot_delay:
-                return
-            self.bot_elapsed = 0.0
-            made_move = bot.make_move()
-            self._check_game_end(made_move, used_bot=True)
-        else:
-            self._check_game_end(None, used_bot=False)
+        if self.game_over:
+            return None
 
-    def on_mouse_press(self, x: float, y: float, button: int, modifiers: int) -> None:
-        if not self.started:
-            self.started = True
-            return
+        controller = self.controller_for_current_player()
+        if controller is None:
+            return None
 
-        if self._bot_for_player(self.board.current_player) is not None:
-            return
+        legal_moves = self.legal_moves()
+        if not legal_moves:
+            return self._record_no_moves(legal_moves_count=0)
 
-        board_x, board_y = to_board_position(x, y)
-        if not (0 <= board_x < BOARD_WIDTH and 0 <= board_y < BOARD_HEIGHT):
-            return
+        move = controller.choose_move(self)
+        if move is None:
+            return self._record_no_moves(legal_moves_count=len(legal_moves))
 
-        if self.selected_pos is None:
-            piece = self.board.get_piece_at(board_x, board_y)
-            if piece and piece.player == self.board.current_player:
-                self.selected_pos = (board_x, board_y)
-            return
+        return self.apply_move(move.start, move.end, legal_moves_count=len(legal_moves))
 
-        if (board_x, board_y) != self.selected_pos:
-            from_x, from_y = self.selected_pos
-            self.board.move_piece(from_x, from_y, board_x, board_y)
-        self.selected_pos = None
+    def apply_move(
+        self,
+        from_pos: Position,
+        to_pos: Position,
+        legal_moves_count: Optional[int] = None,
+    ) -> Optional[MoveRecord]:
+        """Apply a move for the current player and record it if valid."""
 
-    def draw_board(self) -> None:
-        for y in range(BOARD_HEIGHT):
-            for x in range(BOARD_WIDTH):
-                color = LIGHT if (x + y) % 2 == 0 else DARK
-                center_x, center_y = to_screen_center(x, y)
-                arcade.draw_lbwh_rectangle_filled(
-                    center_x - SQUARE_SIZE / 2,
-                    center_y - SQUARE_SIZE / 2,
-                    SQUARE_SIZE,
-                    SQUARE_SIZE,
-                    color,
-                )
-        arcade.draw_line(0, HEIGHT - SQUARE_SIZE, WIDTH, HEIGHT - SQUARE_SIZE, LINE_COLOR, 4)
-        arcade.draw_line(0, SQUARE_SIZE, WIDTH, SQUARE_SIZE, LINE_COLOR, 4)
+        if self.game_over:
+            return None
 
-    def draw_pieces(self) -> None:
-        for x in range(BOARD_WIDTH):
-            for y in range(BOARD_HEIGHT):
-                piece = self.board.get_piece_at(x, y)
-                if piece:
-                    center_x, center_y = to_screen_center(x, y)
-                    arcade.draw_circle_filled(
-                        center_x,
-                        center_y,
-                        SQUARE_SIZE / 3,
-                        PIECE_COLORS[piece.type],
-                    )
-                    arcade.draw_text(
-                        piece.type.value,
-                        center_x,
-                        center_y,
-                        TEXT_COLORS[piece.type],
-                        font_size=18,
-                        anchor_x="center",
-                        anchor_y="center",
-                    )
+        mover = self.board.current_player
+        board_before = serialize_board(self.board)
+        legal_moves = self.legal_moves()
+        if legal_moves_count is None:
+            legal_moves_count = len(legal_moves)
 
-    def draw_selected(self, pos: Tuple[int, int]) -> None:
-        x, y = pos
-        center_x, center_y = to_screen_center(x, y)
-        arcade.draw_lbwh_rectangle_filled(
-            center_x - SQUARE_SIZE / 2,
-            center_y - SQUARE_SIZE / 2,
-            SQUARE_SIZE,
-            SQUARE_SIZE,
-            (255, 255, 0, 100),
+        piece = self.board.get_piece_at(from_pos.x, from_pos.y)
+        if piece is None or piece.player != mover:
+            return None
+
+        captured_piece = self.board.get_piece_at(to_pos.x, to_pos.y)
+        moved = self.board.move_piece(from_pos.x, from_pos.y, to_pos.x, to_pos.y)
+        if not moved:
+            return None
+
+        board_after = serialize_board(self.board)
+        self.move_number += 1
+
+        record = self._build_record(
+            move_number=self.move_number,
+            player=mover,
+            piece_type=piece.type,
+            from_pos=from_pos,
+            to_pos=to_pos,
+            board_before=board_before,
+            board_after=board_after,
+            captured_piece=captured_piece.type if captured_piece else None,
+            legal_moves_count=legal_moves_count,
+        )
+        self.history.append(record)
+        return record
+
+    def _record_no_moves(self, legal_moves_count: int) -> MoveRecord:
+        board_state = serialize_board(self.board)
+        record = self._build_record(
+            move_number=self.move_number,
+            player=self.board.current_player,
+            piece_type=None,
+            from_pos=None,
+            to_pos=None,
+            board_before=board_state,
+            board_after=board_state,
+            captured_piece=None,
+            legal_moves_count=legal_moves_count,
+            move_made=False,
+            game_over_reason="no_moves",
+        )
+        self.history.append(record)
+        return record
+
+    def _build_record(
+        self,
+        move_number: int,
+        player: Player,
+        piece_type: Optional[PieceType],
+        from_pos: Optional[Position],
+        to_pos: Optional[Position],
+        board_before: str,
+        board_after: str,
+        captured_piece: Optional[PieceType],
+        legal_moves_count: int,
+        move_made: bool = True,
+        game_over_reason: str = "",
+    ) -> MoveRecord:
+        winner = self.board.check_for_winner()
+        game_over = winner is not None
+        if not game_over and move_made:
+            if not self.board.legal_moves():
+                game_over = True
+                game_over_reason = "no_moves"
+        if not move_made and game_over_reason:
+            game_over = True
+
+        if winner == Player.BUFFALO:
+            game_over_reason = "buffalo_reached_end"
+
+        if game_over:
+            self.game_over = True
+            self.winner = winner
+            self.game_over_reason = game_over_reason
+
+        return MoveRecord(
+            move_number=move_number,
+            player=player,
+            piece_type=piece_type,
+            from_pos=from_pos,
+            to_pos=to_pos,
+            board_before=board_before,
+            board_after=board_after,
+            captured_piece=captured_piece,
+            legal_moves=legal_moves_count,
+            move_made=move_made,
+            game_over=game_over,
+            winner=winner,
+            game_over_reason=game_over_reason,
         )
 
-    def _bot_for_player(self, player: Player):
-        if player == Player.BUFFALO:
-            return self.buffalo_bot
-        return self.hunter_bot
 
-    def _check_game_end(self, made_move: Optional[bool], used_bot: bool) -> None:
-        maybe_winner = self.board.check_for_winner()
-        if maybe_winner is not None:
-            self.started = False
-            self.set_caption(f"YEEHAW: {maybe_winner.name} wins!")
-            return
-        if used_bot and made_move is False:
-            self.started = False
-            self.set_caption("No valid moves -- Game Over!")
+def serialize_board(board: Board) -> str:
+    """Serialize the board from top row (y=0) to bottom (y=height-1)."""
+
+    rows: List[str] = []
+    for y in range(board.height):
+        row: List[str] = []
+        for x in range(board.width):
+            piece = board.get_piece_at(x, y)
+            row.append(piece.type.value if piece else ".")
+        rows.append("".join(row))
+    return "/".join(rows)
 
 
-@click.command()
-@click.option("--frames", "max_frames", type=int, default=None, help="Number of frames to run (for testing)")
-@click.option(
-    "--buffalo-strategy",
-    type=str,
-    default="naive",
-    help="Strategy for the buffalo player (e.g., 'naive')",
-)
-@click.option(
-    "--hunter-strategy",
-    type=str,
-    default="naive",
-    help="Strategy for the hunter player (e.g., 'naive')",
-)
-def main(max_frames=None, buffalo_strategy: str = None, hunter_strategy: str = None) -> None:
-    GameWindow(
-        max_frames=max_frames,
-        buffalo_strategy=buffalo_strategy,
-        hunter_strategy=hunter_strategy,
-    )
-    arcade.run()
+def record_to_row(record: MoveRecord) -> dict:
+    return {
+        "move_number": record.move_number,
+        "player": record.player.name,
+        "piece_type": record.piece_type.value if record.piece_type else "",
+        "from_x": record.from_pos.x if record.from_pos else "",
+        "from_y": record.from_pos.y if record.from_pos else "",
+        "to_x": record.to_pos.x if record.to_pos else "",
+        "to_y": record.to_pos.y if record.to_pos else "",
+        "board_before": record.board_before,
+        "board_after": record.board_after,
+        "captured": bool(record.captured_piece),
+        "captured_piece": record.captured_piece.value if record.captured_piece else "",
+        "legal_moves": record.legal_moves,
+        "move_made": record.move_made,
+        "game_over": record.game_over,
+        "winner": record.winner.name if record.winner else "",
+        "game_over_reason": record.game_over_reason,
+    }
 
 
-if __name__ == "__main__":
-    main()
+def csv_fields() -> Iterable[str]:
+    return [
+        "move_number",
+        "player",
+        "piece_type",
+        "from_x",
+        "from_y",
+        "to_x",
+        "to_y",
+        "board_before",
+        "board_after",
+        "captured",
+        "captured_piece",
+        "legal_moves",
+        "move_made",
+        "game_over",
+        "winner",
+        "game_over_reason",
+    ]

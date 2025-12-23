@@ -1,6 +1,6 @@
 from enum import Enum
 from dataclasses import dataclass
-from typing import Dict, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
 
 class Player(Enum):
     BUFFALO = 0
@@ -20,6 +20,13 @@ class Position:
 class Piece:
     type: PieceType
     player: Player
+
+@dataclass
+class Move:
+    player: Player
+    piece: Piece
+    start: Position
+    end: Position
 
 class Board:
     width: int = 11
@@ -60,9 +67,15 @@ class Board:
 
         if not self._is_destination_inside_board(to_x, to_y):
             return False
+        
+        # a move is not considered valid if it doesn't change position
+        if from_x == to_x and from_y == to_y:
+            return False
 
-        is_destination_empty = self.get_piece_at(to_x, to_y) is None
+        piece_at_destination = self.get_piece_at(to_x, to_y)
+        is_destination_empty = piece_at_destination is None
         destination_not_on_bottom_row = to_y != self.height - 1
+        destination_not_on_top_row = to_y != 0
 
         if piece.type == PieceType.BUFFALO:
             is_one_move_down = (to_y == from_y + 1) and (from_x == to_x)
@@ -72,29 +85,60 @@ class Board:
         if piece.type == PieceType.CHIEF:
             delta_x, delta_y = abs(to_x - from_x), abs(to_y - from_y)
             is_kinglike_move = (delta_x <= 1 and delta_y <= 1)
-            piece_at_destination = self.get_piece_at(to_x, to_y)
 
-            return is_kinglike_move and (is_destination_empty or (piece_at_destination and piece_at_destination.player != piece.player)) and destination_not_on_bottom_row
+            # must be king-like
+            if not is_kinglike_move:
+                return False
+
+            # King can move to the bottom row
+            if not destination_not_on_bottom_row:
+                return False
+
+            # King can move to empty square
+            if is_destination_empty:
+                return True
         
+            if piece_at_destination.player != piece.player:
+                return True
+        
+            return False
+
+
         if piece.type == PieceType.DOG:
+
+            # dogs cannot capture, only block
+            if not is_destination_empty:
+                return False
+            
+            if not destination_not_on_top_row:
+                return False
+
+            if not destination_not_on_bottom_row:
+                return False
+
             delta_x, delta_y = abs(to_x - from_x), abs(to_y - from_y)
             is_queen_like_move = (delta_x == delta_y) or (to_x == from_x) or (to_y == from_y)
 
-            no_pieces_between = True
-            if is_queen_like_move:
-                step_x = 1 if to_x > from_x else -1 if to_x < from_x else 0
-                step_y = 1 if to_y > from_y else -1 if to_y < from_y else 0
-                curr_x, curr_y = from_x + step_x, from_y + step_y
-                while (curr_x, curr_y) != (to_x, to_y):
-                    if self.get_piece_at(curr_x, curr_y) is not None:
-                        no_pieces_between = False
-                        break
-                    curr_x += step_x
-                    curr_y += step_y
+            if not is_queen_like_move:
+                return False
+            
 
-            return is_queen_like_move and is_destination_empty and no_pieces_between and destination_not_on_bottom_row
+            no_pieces_between = True
+
+            step_x = 1 if to_x > from_x else -1 if to_x < from_x else 0
+            step_y = 1 if to_y > from_y else -1 if to_y < from_y else 0
+            curr_x, curr_y = from_x + step_x, from_y + step_y
+            while (curr_x, curr_y) != (to_x, to_y):
+                if self.get_piece_at(curr_x, curr_y) is not None:
+                    no_pieces_between = False
+                    break
+                curr_x += step_x
+                curr_y += step_y
+
+            return no_pieces_between
 
         return False
+
 
     def check_for_winner(self) -> Optional[Player]:
         # any buffalo on bottom row
@@ -103,6 +147,10 @@ class Board:
             if piece is not None:
                 if piece.type == PieceType.BUFFALO:
                     return Player.BUFFALO
+                
+        # if buffalo's turn and no legal moves, hunters win. This includes the case where no more buffalo left to move
+        if self.current_player == Player.BUFFALO and not self.legal_moves():
+            return Player.HUNTERS
 
         return None
 
@@ -110,7 +158,7 @@ class Board:
         piece = self.get_piece_at(from_x, from_y)
         if not piece:
             return False
-        
+
         if piece.player != self.current_player:
             return False
 
@@ -123,3 +171,22 @@ class Board:
         # Switch current player
         self.switch_player()
         return True
+
+    def legal_moves(self) -> List[Move]:
+        """Return legal moves for the current player without mutating the board."""
+
+        legal_moves = []
+        for (from_x, from_y), piece in self.pieces.items():
+            if piece.player != self.current_player:
+                continue
+            for to_x in range(self.width):
+                for to_y in range(self.height):
+                    if self._is_valid_move(piece, from_x, from_y, to_x, to_y):
+                        move = Move(
+                            player=self.current_player,
+                            piece=piece,
+                            start=Position(from_x, from_y),
+                            end=Position(to_x, to_y)
+                        )
+                        legal_moves.append(move)
+        return legal_moves
