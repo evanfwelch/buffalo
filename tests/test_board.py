@@ -81,6 +81,7 @@ def test_hunters_win_when_buffalo_no_moves():
         (PieceType.CHIEF, Player.HUNTERS, (5, 5), (6, 4), True),  # can move diagonally by 1
         (PieceType.CHIEF, Player.HUNTERS, (5, 5), (7, 6), False),  # cant move by 2 spaces
         (PieceType.CHIEF, Player.HUNTERS, (5, 5), (5, 6), False),  # cannot move to bottom rank
+        (PieceType.CHIEF, Player.HUNTERS, (5, 1), (5, 0), False),  # cannot move to top rank
         (PieceType.DOG, Player.HUNTERS, (5, 5), (5, 4), True),
         (PieceType.DOG, Player.HUNTERS, (5, 5), (7, 5), True),  
         (PieceType.DOG, Player.HUNTERS, (5, 5), (7, 6), False),  # cannot move to bottom rank

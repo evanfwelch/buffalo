@@ -93,6 +93,10 @@ class Board:
             # King can move to the bottom row
             if not destination_not_on_bottom_row:
                 return False
+            
+            # king cannot be on top row
+            if not destination_not_on_top_row:
+                return False
 
             # King can move to empty square
             if is_destination_empty:
