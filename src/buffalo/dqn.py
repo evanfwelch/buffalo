@@ -150,6 +150,7 @@ def compute_reward(board: Board, player: Player) -> float:
 @dataclass
 class DQNAgent:
     """Minimal Deep Q-learning agent."""
+
     state_size: int
     action_size: int = 4
     gamma: float = 0.99

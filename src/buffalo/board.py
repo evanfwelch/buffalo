@@ -2,24 +2,29 @@ from enum import Enum
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
+
 class Player(Enum):
     BUFFALO = 0
     HUNTERS = 1
+
 
 class PieceType(Enum):
     BUFFALO = "B"
     DOG = "D"
     CHIEF = "C"
 
+
 @dataclass
 class Position:
     x: int
     y: int
 
+
 @dataclass
 class Piece:
     type: PieceType
     player: Player
+
 
 @dataclass
 class Move:
@@ -28,17 +33,45 @@ class Move:
     start: Position
     end: Position
 
+
+class GameOverReason(Enum):
+    # NOTE: AFAIK chief and dogs can never get stalemated/stuck
+    BUFFALO_CROSSED = "buffalo_crossed"
+    BUFFALO_STUCK = "buffalo_stuck"
+    BUFFALO_EXTINCT = "buffalo_extinct"
+
+
+@dataclass
+class MoveResult:
+    captured_piece: Optional[Piece]
+    winner_after_move: Optional[Player]
+    game_over_reason: Optional[GameOverReason]
+
+
+@dataclass(frozen=True)
+class MoveRecord:
+    move_number: int
+    player: Player
+    piece_type: Optional[PieceType]
+    from_pos: Optional[Position]
+    to_pos: Optional[Position]
+    board_before: str
+    board_after: str
+    move_result: MoveResult
+
+
 class Board:
     width: int = 11
     height: int = 7
 
-    _INITIAL_DOG_FILES = [3,4,6,7]
+    _INITIAL_DOG_FILES = [3, 4, 6, 7]
     _INITIAL_KING_FILE = 5
 
     def __init__(self):
         self.pieces: Dict[Tuple[int, int], Piece] = {}
         self.current_player = Player.BUFFALO
         self.initialize_board()
+        self.move_number = 0
 
     def initialize_board(self) -> None:
         # Place buffalo pieces on top rank
@@ -64,10 +97,9 @@ class Board:
     def _is_valid_move(self, piece: Piece, from_x: int, from_y: int, to_x: int, to_y: int) -> bool:
         assert piece.player == self.current_player, "Piece does not belong to the current player"
 
-
         if not self._is_destination_inside_board(to_x, to_y):
             return False
-        
+
         # a move is not considered valid if it doesn't change position
         if from_x == to_x and from_y == to_y:
             return False
@@ -79,12 +111,12 @@ class Board:
 
         if piece.type == PieceType.BUFFALO:
             is_one_move_down = (to_y == from_y + 1) and (from_x == to_x)
-            
+
             return is_one_move_down and is_destination_empty
-        
+
         if piece.type == PieceType.CHIEF:
             delta_x, delta_y = abs(to_x - from_x), abs(to_y - from_y)
-            is_kinglike_move = (delta_x <= 1 and delta_y <= 1)
+            is_kinglike_move = delta_x <= 1 and delta_y <= 1
 
             # must be king-like
             if not is_kinglike_move:
@@ -93,7 +125,7 @@ class Board:
             # King can move to the bottom row
             if not destination_not_on_bottom_row:
                 return False
-            
+
             # king cannot be on top row
             if not destination_not_on_top_row:
                 return False
@@ -101,19 +133,18 @@ class Board:
             # King can move to empty square
             if is_destination_empty:
                 return True
-        
+
             if piece_at_destination.player != piece.player:
                 return True
-        
-            return False
 
+            return False
 
         if piece.type == PieceType.DOG:
 
             # dogs cannot capture, only block
             if not is_destination_empty:
                 return False
-            
+
             if not destination_not_on_top_row:
                 return False
 
@@ -125,7 +156,6 @@ class Board:
 
             if not is_queen_like_move:
                 return False
-            
 
             no_pieces_between = True
 
@@ -143,38 +173,77 @@ class Board:
 
         return False
 
-
-    def check_for_winner(self) -> Optional[Player]:
+    def check_for_winner(self) -> Tuple[Optional[Player], GameOverReason]:
         # any buffalo on bottom row
         for x in range(self.width):
             piece = self.get_piece_at(x, self.height - 1)
             if piece is not None:
                 if piece.type == PieceType.BUFFALO:
-                    return Player.BUFFALO
-                
+                    return Player.BUFFALO, GameOverReason.BUFFALO_CROSSED
+
         # if buffalo's turn and no legal moves, hunters win. This includes the case where no more buffalo left to move
         if self.current_player == Player.BUFFALO and not self.legal_moves():
-            return Player.HUNTERS
+            return Player.HUNTERS, GameOverReason.BUFFALO_STUCK
 
-        return None
+        # if all buffalo are extinct, chief wins
+        any_buffalo_remaining = any(piece.type == PieceType.BUFFALO for piece in self.pieces.values())
+        if not any_buffalo_remaining:
+            return Player.HUNTERS, GameOverReason.BUFFALO_EXTINCT
 
-    def move_piece(self, from_x: int, from_y: int, to_x: int, to_y: int) -> bool:
+        return None, None
+
+    def move_piece(
+        self, from_x: int, from_y: int, to_x: int, to_y: int, with_record: bool = True
+    ) -> Tuple[MoveResult, Optional[MoveRecord]]:
         piece = self.get_piece_at(from_x, from_y)
         if not piece:
-            return False
+            raise ValueError("No piece at the starting position")
 
         if piece.player != self.current_player:
-            return False
+            raise ValueError("Piece does not belong to current player")
 
         if not self._is_valid_move(piece, from_x, from_y, to_x, to_y):
-            return False
+            raise ValueError("Invalid move")
+
+        captured_piece = self.get_piece_at(to_x, to_y)
+
+        if with_record:
+            board_before: str = self.serialize()
 
         self.pieces[(to_x, to_y)] = piece
         del self.pieces[(from_x, from_y)]
 
+        if with_record:
+            board_after: str = self.serialize()
+
+        # increment move number
+        self.move_number += 1
+
         # Switch current player
         self.switch_player()
-        return True
+
+        # check for winner
+        winning_player, reason = self.check_for_winner()
+
+        move_result = MoveResult(
+            captured_piece=captured_piece,
+            winner_after_move=winning_player,
+            game_over_reason=reason,
+        )
+
+        if with_record:
+            move_record = MoveRecord(
+                move_number=self.move_number,
+                player=piece.player,
+                piece_type=piece.type,
+                from_pos=Position(from_x, from_y),
+                to_pos=Position(to_x, to_y),
+                board_before=board_before,
+                board_after=board_after,
+                move_result=move_result,
+            )
+            return move_result, move_record
+        return move_result, None
 
     def legal_moves(self) -> List[Move]:
         """Return legal moves for the current player without mutating the board."""
@@ -190,7 +259,7 @@ class Board:
                             player=self.current_player,
                             piece=piece,
                             start=Position(from_x, from_y),
-                            end=Position(to_x, to_y)
+                            end=Position(to_x, to_y),
                         )
                         legal_moves.append(move)
         return legal_moves
@@ -229,10 +298,6 @@ class Board:
                     piece_type = PieceType(char)
                 except ValueError as exc:
                     raise ValueError(f"Unknown piece token: {char}") from exc
-                player = (
-                    Player.BUFFALO
-                    if piece_type == PieceType.BUFFALO
-                    else Player.HUNTERS
-                )
+                player = Player.BUFFALO if piece_type == PieceType.BUFFALO else Player.HUNTERS
                 board.pieces[(x, y)] = Piece(piece_type, player)
         return board

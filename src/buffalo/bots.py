@@ -5,8 +5,6 @@ from typing import Any, List, Optional
 from .board import Board, Move, Player
 
 
-
-
 class Bot(ABC):
     def __init__(self, board: Board, player: Player) -> None:
         self.board = board
@@ -15,9 +13,7 @@ class Bot(ABC):
     def generate_legal_moves(self) -> List[Move]:
         """Generate all legal moves for this bot's player."""
 
-        assert (
-            self.board.current_player == self.player
-        ), "Bot can only generate moves on its turn"
+        assert self.board.current_player == self.player, "Bot can only generate moves on its turn"
         return self.board.legal_moves()
 
     @abstractmethod
@@ -38,6 +34,7 @@ class NaiveBuffalo(Bot):
 
     def choose_move(self, game: Optional[Any] = None) -> Optional[Move]:
         return self._choose_random_legal_move()
+
 
 class NaiveHunter(Bot):
     def __init__(self, board: Board) -> None:

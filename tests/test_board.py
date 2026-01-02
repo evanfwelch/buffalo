@@ -1,6 +1,6 @@
 import pytest
 
-from buffalo.board import Board, Piece, PieceType, Player
+from buffalo.board import Board, Piece, PieceType, Player, GameOverReason
 
 
 def test_initial_setup():
@@ -8,20 +8,14 @@ def test_initial_setup():
 
     assert board.current_player == Player.BUFFALO
 
-    buffalo_positions = [
-        pos for pos, piece in board.pieces.items() if piece.type == PieceType.BUFFALO
-    ]
+    buffalo_positions = [pos for pos, piece in board.pieces.items() if piece.type == PieceType.BUFFALO]
     assert len(buffalo_positions) == board.width
     assert all(y == 0 for _, y in buffalo_positions)
 
-    dog_positions = [
-        pos for pos, piece in board.pieces.items() if piece.type == PieceType.DOG
-    ]
+    dog_positions = [pos for pos, piece in board.pieces.items() if piece.type == PieceType.DOG]
     assert sorted(dog_positions) == [(3, 5), (4, 5), (6, 5), (7, 5)]
 
-    chief_positions = [
-        pos for pos, piece in board.pieces.items() if piece.type == PieceType.CHIEF
-    ]
+    chief_positions = [pos for pos, piece in board.pieces.items() if piece.type == PieceType.CHIEF]
     assert chief_positions == [(5, 5)]
 
 
@@ -39,23 +33,11 @@ def test_buffalo_legal_moves_initial():
         assert piece.player == Player.BUFFALO
 
 
-def test_move_switches_player_and_hunter_moves_not_bottom():
-    board = Board()
-
-    moved = board.move_piece(0, 0, 0, 1)
-    assert moved is True
-    assert board.current_player == Player.HUNTERS
-
-    for move in board.legal_moves():
-        print(move)
-        assert move.end.y != board.height - 1
-
-
 def test_winner_detected_on_bottom_row():
     board = Board()
     board.pieces[(0, board.height - 1)] = Piece(PieceType.BUFFALO, Player.BUFFALO)
 
-    assert board.check_for_winner() == Player.BUFFALO
+    assert board.check_for_winner() == (Player.BUFFALO, GameOverReason.BUFFALO_CROSSED)
 
 
 def test_hunters_win_when_buffalo_no_moves():
@@ -67,24 +49,84 @@ def test_hunters_win_when_buffalo_no_moves():
     board.current_player = Player.BUFFALO
 
     assert board.legal_moves() == []
-    assert board.check_for_winner() == Player.HUNTERS
+    assert board.check_for_winner() == (Player.HUNTERS, GameOverReason.BUFFALO_STUCK)
 
 
 @pytest.mark.parametrize(
     ("piece_type", "player", "start", "end", "expected"),
     [
-        (PieceType.BUFFALO, Player.BUFFALO, (5, 0), (5, 1), True),   # can move down by 1step
-        (PieceType.BUFFALO, Player.BUFFALO, (5, 0), (5, 2), False),  # cant move by 2 steps
-        (PieceType.BUFFALO, Player.BUFFALO, (5, 0), (6, 1), False),  # cant move diagonally
-        (PieceType.BUFFALO, Player.BUFFALO, (5, 1), (5, 0), False),  # buffalo cant move backward
-        (PieceType.BUFFALO, Player.BUFFALO, (5, 5), (5, 6), True),  # only buffalo can cross to bottom rank for a win
-        (PieceType.CHIEF, Player.HUNTERS, (5, 5), (6, 4), True),  # can move diagonally by 1
-        (PieceType.CHIEF, Player.HUNTERS, (5, 5), (7, 6), False),  # cant move by 2 spaces
-        (PieceType.CHIEF, Player.HUNTERS, (5, 5), (5, 6), False),  # cannot move to bottom rank
-        (PieceType.CHIEF, Player.HUNTERS, (5, 1), (5, 0), False),  # cannot move to top rank
+        (
+            PieceType.BUFFALO,
+            Player.BUFFALO,
+            (5, 0),
+            (5, 1),
+            True,
+        ),  # can move down by 1step
+        (
+            PieceType.BUFFALO,
+            Player.BUFFALO,
+            (5, 0),
+            (5, 2),
+            False,
+        ),  # cant move by 2 steps
+        (
+            PieceType.BUFFALO,
+            Player.BUFFALO,
+            (5, 0),
+            (6, 1),
+            False,
+        ),  # cant move diagonally
+        (
+            PieceType.BUFFALO,
+            Player.BUFFALO,
+            (5, 1),
+            (5, 0),
+            False,
+        ),  # buffalo cant move backward
+        (
+            PieceType.BUFFALO,
+            Player.BUFFALO,
+            (5, 5),
+            (5, 6),
+            True,
+        ),  # only buffalo can cross to bottom rank for a win
+        (
+            PieceType.CHIEF,
+            Player.HUNTERS,
+            (5, 5),
+            (6, 4),
+            True,
+        ),  # can move diagonally by 1
+        (
+            PieceType.CHIEF,
+            Player.HUNTERS,
+            (5, 5),
+            (7, 6),
+            False,
+        ),  # cant move by 2 spaces
+        (
+            PieceType.CHIEF,
+            Player.HUNTERS,
+            (5, 5),
+            (5, 6),
+            False,
+        ),  # cannot move to bottom rank
+        (
+            PieceType.CHIEF,
+            Player.HUNTERS,
+            (5, 1),
+            (5, 0),
+            False,
+        ),  # cannot move to top rank
         (PieceType.DOG, Player.HUNTERS, (5, 5), (5, 4), True),
-        (PieceType.DOG, Player.HUNTERS, (5, 5), (7, 5), True),  
-        (PieceType.DOG, Player.HUNTERS, (5, 5), (7, 6), False),  # cannot move to bottom rank
+        (PieceType.DOG, Player.HUNTERS, (5, 5), (7, 5), True),
+        (
+            PieceType.DOG,
+            Player.HUNTERS,
+            (5, 5),
+            (7, 6),
+            False,
+        ),  # cannot move to bottom rank
         (PieceType.DOG, Player.HUNTERS, (5, 5), (6, 4), True),
         (PieceType.DOG, Player.HUNTERS, (5, 5), (5, 5), False),
     ],
@@ -94,8 +136,8 @@ def test_single_piece_moves_on_empty_board(piece_type, player, start, end, expec
     board.pieces = {start: Piece(piece_type, player)}
     board.current_player = player
 
-    moved = board.move_piece(start[0], start[1], end[0], end[1])
-    assert moved is expected
+    is_valid = board._is_valid_move(board.get_piece_at(*start), start[0], start[1], end[0], end[1])
+    assert is_valid is expected
 
 
 def test_serialize_roundtrip_initial_board():

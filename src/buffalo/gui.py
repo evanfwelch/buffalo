@@ -4,7 +4,15 @@ from typing import Optional, Tuple
 import arcade
 import click
 
-from .board import Board, PieceType, Player, Position
+from .board import (
+    Board,
+    MoveResult,
+    PieceType,
+    Player,
+    Position,
+    MoveRecord,
+    MoveResult,
+)
 from .bots import NaiveBuffalo, NaiveHunter
 from .game import Game
 
@@ -14,7 +22,14 @@ logger = logging.getLogger(__name__)
 BOARD_WIDTH = 11
 BOARD_HEIGHT = 7
 SQUARE_SIZE = 80
-WIDTH = BOARD_WIDTH * SQUARE_SIZE
+PANEL_WIDTH = 360
+PANEL_PADDING = 16
+PANEL_BG = (30, 30, 30)
+PANEL_TEXT = (230, 230, 230)
+PANEL_HEADER = (255, 210, 120)
+PANEL_LINE_HEIGHT = 18
+PANEL_MAX_LINES = 28
+BOARD_PIXEL_WIDTH = BOARD_WIDTH * SQUARE_SIZE
 HEIGHT = BOARD_HEIGHT * SQUARE_SIZE
 
 
@@ -55,11 +70,14 @@ class GameWindow(arcade.Window):
         max_frames: Optional[int] = None,
         buffalo_strategy: Optional[str] = None,
         hunter_strategy: Optional[str] = None,
+        show_logs: bool = False,
     ) -> None:
-        super().__init__(WIDTH, HEIGHT, "Buffalo!")
+        window_width = BOARD_PIXEL_WIDTH + (PANEL_WIDTH if show_logs else 0)
+        super().__init__(window_width, HEIGHT, "Buffalo!")
         self.selected_pos: Optional[Tuple[int, int]] = None
         self.buffalo_strategy = buffalo_strategy
         self.hunter_strategy = hunter_strategy
+        self.show_logs = show_logs
         board = Board()
         self.game = Game(
             board=board,
@@ -71,6 +89,8 @@ class GameWindow(arcade.Window):
         self.max_frames = max_frames
         self.bot_delay = 0.25
         self.bot_elapsed = 0.0
+        self._history_cache = []
+        self._history_count = 0
 
     def on_draw(self) -> None:
         self.clear()
@@ -78,6 +98,8 @@ class GameWindow(arcade.Window):
         if self.selected_pos:
             self.draw_selected(self.selected_pos)
         self.draw_pieces()
+        if self.show_logs:
+            self.draw_sidebar()
 
     def on_update(self, delta_time: float) -> None:
         if not self.started:
@@ -89,41 +111,22 @@ class GameWindow(arcade.Window):
             return
 
         controller = self.game.controller_for_current_player()
-        if controller is not None:
-            self.bot_elapsed += delta_time
-            if self.bot_elapsed < self.bot_delay:
-                return
-            self.bot_elapsed = 0.0
-            self.game.step()
-            self._check_game_end()
+
+        assert controller is not None, "Controller should not be None"
+
+        self.bot_elapsed += delta_time
+        if self.bot_elapsed < self.bot_delay:
+            return
+        self.bot_elapsed = 0.0
+        move_result, move_record = self.game.step()
+
+        self._maybe_end_game(move_result)
 
     def on_mouse_press(self, x: float, y: float, button: int, modifiers: int) -> None:
         # start the game upon first click
         if not self.started:
             self.started = True
             return
-
-        # if self.game.controller_for_current_player() is not None:
-        #     return
-
-        # board_x, board_y = to_board_position(x, y)
-        # if not (0 <= board_x < BOARD_WIDTH and 0 <= board_y < BOARD_HEIGHT):
-        #     return
-
-        # if self.selected_pos is None:
-        #     piece = self.game.board.get_piece_at(board_x, board_y)
-        #     if piece and piece.player == self.game.board.current_player:
-        #         self.selected_pos = (board_x, board_y)
-        #     return
-
-        # if (board_x, board_y) != self.selected_pos:
-        #     from_x, from_y = self.selected_pos
-        #     self.game.apply_move(
-        #         from_pos=Position(from_x, from_y),
-        #         to_pos=Position(board_x, board_y),
-        #     )
-        #     self._check_game_end()
-        # self.selected_pos = None
 
     def draw_board(self) -> None:
         for y in range(BOARD_HEIGHT):
@@ -137,8 +140,56 @@ class GameWindow(arcade.Window):
                     SQUARE_SIZE,
                     color,
                 )
-        arcade.draw_line(0, HEIGHT - SQUARE_SIZE, WIDTH, HEIGHT - SQUARE_SIZE, LINE_COLOR, 4)
-        arcade.draw_line(0, SQUARE_SIZE, WIDTH, SQUARE_SIZE, LINE_COLOR, 4)
+        arcade.draw_line(
+            0,
+            HEIGHT - SQUARE_SIZE,
+            BOARD_PIXEL_WIDTH,
+            HEIGHT - SQUARE_SIZE,
+            LINE_COLOR,
+            4,
+        )
+        arcade.draw_line(0, SQUARE_SIZE, BOARD_PIXEL_WIDTH, SQUARE_SIZE, LINE_COLOR, 4)
+
+    def draw_sidebar(self) -> None:
+        arcade.draw_lbwh_rectangle_filled(
+            BOARD_PIXEL_WIDTH,
+            0,
+            PANEL_WIDTH,
+            HEIGHT,
+            PANEL_BG,
+        )
+
+        header_x = BOARD_PIXEL_WIDTH + PANEL_PADDING
+        header_y = HEIGHT - PANEL_PADDING
+        arcade.draw_text(
+            "Move History",
+            header_x,
+            header_y,
+            PANEL_HEADER,
+            font_size=16,
+            anchor_x="left",
+            anchor_y="top",
+        )
+
+        if len(self.game.history) != self._history_count:
+            self._history_count = len(self.game.history)
+            recent = self.game.history[-PANEL_MAX_LINES:]
+            self._history_cache = [
+                f"{record.move_number:03d} {record.player.name} {record.board_after}" for record in recent
+            ]
+
+        text_y = header_y - (PANEL_LINE_HEIGHT * 1.6)
+        for line in self._history_cache:
+            arcade.draw_text(
+                line,
+                header_x,
+                text_y,
+                PANEL_TEXT,
+                font_size=12,
+                anchor_x="left",
+                anchor_y="top",
+            )
+            text_y -= PANEL_LINE_HEIGHT
 
     def draw_pieces(self) -> None:
         for x in range(BOARD_WIDTH):
@@ -180,20 +231,23 @@ class GameWindow(arcade.Window):
             return NaiveHunter(board)
         return None
 
-    def _check_game_end(self) -> None:
-        if not self.game.game_over:
-            return
-        if self.game.winner is not None:
+    def _maybe_end_game(self, move_result: MoveResult) -> None:
+        if move_result.winner_after_move is not None:
             self.started = False
-            self.set_caption(f"YEEHAW: {self.game.winner.name} wins!")
-            return
-        if self.game.game_over_reason == "no_moves":
-            self.started = False
-            self.set_caption("No valid moves -- Game Over!")
+            self.set_caption(
+                f"YEEHAW: {move_result.winner_after_move.name} wins! Reason = {move_result.game_over_reason}"
+            )
+        return None
 
 
 @click.command()
-@click.option("--frames", "max_frames", type=int, default=None, help="Number of frames to run (for testing)")
+@click.option(
+    "--frames",
+    "max_frames",
+    type=int,
+    default=None,
+    help="Number of frames to run (for testing)",
+)
 @click.option(
     "--buffalo-strategy",
     type=str,
@@ -206,11 +260,18 @@ class GameWindow(arcade.Window):
     default="naive",
     help="Strategy for the hunter player (e.g., 'naive')",
 )
-def main(max_frames=None, buffalo_strategy: str = None, hunter_strategy: str = None) -> None:
+@click.option("--show-logs", is_flag=True, help="Show move history sidebar.")
+def main(
+    max_frames=None,
+    buffalo_strategy: str = None,
+    hunter_strategy: str = None,
+    show_logs: bool = False,
+) -> None:
     GameWindow(
         max_frames=max_frames,
         buffalo_strategy=buffalo_strategy,
         hunter_strategy=hunter_strategy,
+        show_logs=show_logs,
     )
     arcade.run()
 
