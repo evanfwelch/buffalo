@@ -96,3 +96,44 @@ def test_single_piece_moves_on_empty_board(piece_type, player, start, end, expec
 
     moved = board.move_piece(start[0], start[1], end[0], end[1])
     assert moved is expected
+
+
+def test_serialize_roundtrip_initial_board():
+    board = Board()
+
+    serialized = board.serialize()
+    restored = Board.deserialize(serialized)
+
+    assert restored.serialize() == serialized
+    assert restored.current_player == Player.BUFFALO
+
+
+def test_serialize_roundtrip_custom_board():
+    board = Board()
+    board.pieces = {
+        (0, 0): Piece(PieceType.BUFFALO, Player.BUFFALO),
+        (5, 3): Piece(PieceType.DOG, Player.HUNTERS),
+        (10, 6): Piece(PieceType.CHIEF, Player.HUNTERS),
+    }
+
+    serialized = board.serialize()
+    restored = Board.deserialize(serialized)
+
+    assert restored.serialize() == serialized
+    assert restored.pieces == board.pieces
+
+
+def test_deserialize_rejects_invalid_data():
+    with pytest.raises(ValueError):
+        Board.deserialize("too/few/rows")
+
+    board = Board()
+    bad_row = "." * (board.width - 1)
+    rows = [bad_row for _ in range(board.height)]
+    with pytest.raises(ValueError):
+        Board.deserialize("/".join(rows))
+
+    rows = ["." * board.width for _ in range(board.height)]
+    rows[0] = "X" + "." * (board.width - 1)
+    with pytest.raises(ValueError):
+        Board.deserialize("/".join(rows))

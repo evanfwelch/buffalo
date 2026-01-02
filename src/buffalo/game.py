@@ -31,7 +31,12 @@ class MoveRecord:
 
 
 class Game:
-    """Manages turn-taking, legal moves, and game history."""
+    """Manages turn-taking, legal moves, and game history.
+
+    Key concept: the Game object asks players for their move, then applies it.
+
+    The player controller could be a bot or a human clicking.
+    """
 
     def __init__(
         self,
@@ -42,6 +47,10 @@ class Game:
         self.board = board or Board()
         self.buffalo_controller = buffalo_controller
         self.hunter_controller = hunter_controller
+
+        assert hasattr(self.buffalo_controller, "choose_move")
+        assert hasattr(self.hunter_controller, "choose_move")
+
         self.history: List[MoveRecord] = []
         self.move_number = 0
         self.game_over = False
@@ -53,29 +62,8 @@ class Game:
             return self.buffalo_controller
         return self.hunter_controller
 
-    def legal_moves(self) -> List[Move]:
-        return self.board.legal_moves()
 
-    def step(self) -> Optional[MoveRecord]:
-        """Advance the game using the configured controller for the current player."""
-
-        if self.game_over:
-            return None
-
-        controller = self.controller_for_current_player()
-        if controller is None:
-            return None
-
-        legal_moves = self.legal_moves()
-        if not legal_moves:
-            return self._record_no_moves(legal_moves_count=0)
-
-        move = controller.choose_move(self)
-        if move is None:
-            return self._record_no_moves(legal_moves_count=len(legal_moves))
-
-        return self.apply_move(move.start, move.end, legal_moves_count=len(legal_moves))
-
+    
     def apply_move(
         self,
         from_pos: Position,
@@ -84,12 +72,11 @@ class Game:
     ) -> Optional[MoveRecord]:
         """Apply a move for the current player and record it if valid."""
 
-        if self.game_over:
-            return None
+        
 
         mover = self.board.current_player
-        board_before = serialize_board(self.board)
-        legal_moves = self.legal_moves()
+        board_before = self.board.serialize()
+        legal_moves = self.board.legal_moves()
         if legal_moves_count is None:
             legal_moves_count = len(legal_moves)
 
@@ -102,7 +89,7 @@ class Game:
         if not moved:
             return None
 
-        board_after = serialize_board(self.board)
+        board_after = self.board.serialize()
         self.move_number += 1
 
         record = self._build_record(
@@ -119,8 +106,29 @@ class Game:
         self.history.append(record)
         return record
 
+    def step(self) -> Optional[MoveRecord]:
+        """Advance the game using the configured controller for the current player."""
+
+        if self.game_over:
+            return None
+
+        controller = self.controller_for_current_player()
+
+        legal_moves = self.board.legal_moves()
+        legal_moves_count = len(legal_moves)
+
+        if not legal_moves:
+            return self._record_no_moves(legal_moves_count=legal_moves_count)
+
+        move = controller.choose_move(self)
+
+        assert move is not None, "Controller must choose a valid move."
+
+        return self.apply_move(move.start, move.end, legal_moves_count=legal_moves_count)
+
+
     def _record_no_moves(self, legal_moves_count: int) -> MoveRecord:
-        board_state = serialize_board(self.board)
+        board_state = self.board.serialize()
         record = self._build_record(
             move_number=self.move_number,
             player=self.board.current_player,
@@ -183,19 +191,6 @@ class Game:
             winner=winner,
             game_over_reason=game_over_reason,
         )
-
-
-def serialize_board(board: Board) -> str:
-    """Serialize the board from top row (y=0) to bottom (y=height-1)."""
-
-    rows: List[str] = []
-    for y in range(board.height):
-        row: List[str] = []
-        for x in range(board.width):
-            piece = board.get_piece_at(x, y)
-            row.append(piece.type.value if piece else ".")
-        rows.append("".join(row))
-    return "/".join(rows)
 
 
 def record_to_row(record: MoveRecord) -> dict:

@@ -98,31 +98,32 @@ class GameWindow(arcade.Window):
             self._check_game_end()
 
     def on_mouse_press(self, x: float, y: float, button: int, modifiers: int) -> None:
+        # start the game upon first click
         if not self.started:
             self.started = True
             return
 
-        if self.game.controller_for_current_player() is not None:
-            return
+        # if self.game.controller_for_current_player() is not None:
+        #     return
 
-        board_x, board_y = to_board_position(x, y)
-        if not (0 <= board_x < BOARD_WIDTH and 0 <= board_y < BOARD_HEIGHT):
-            return
+        # board_x, board_y = to_board_position(x, y)
+        # if not (0 <= board_x < BOARD_WIDTH and 0 <= board_y < BOARD_HEIGHT):
+        #     return
 
-        if self.selected_pos is None:
-            piece = self.game.board.get_piece_at(board_x, board_y)
-            if piece and piece.player == self.game.board.current_player:
-                self.selected_pos = (board_x, board_y)
-            return
+        # if self.selected_pos is None:
+        #     piece = self.game.board.get_piece_at(board_x, board_y)
+        #     if piece and piece.player == self.game.board.current_player:
+        #         self.selected_pos = (board_x, board_y)
+        #     return
 
-        if (board_x, board_y) != self.selected_pos:
-            from_x, from_y = self.selected_pos
-            self.game.apply_move(
-                from_pos=Position(from_x, from_y),
-                to_pos=Position(board_x, board_y),
-            )
-            self._check_game_end()
-        self.selected_pos = None
+        # if (board_x, board_y) != self.selected_pos:
+        #     from_x, from_y = self.selected_pos
+        #     self.game.apply_move(
+        #         from_pos=Position(from_x, from_y),
+        #         to_pos=Position(board_x, board_y),
+        #     )
+        #     self._check_game_end()
+        # self.selected_pos = None
 
     def draw_board(self) -> None:
         for y in range(BOARD_HEIGHT):

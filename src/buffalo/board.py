@@ -194,3 +194,45 @@ class Board:
                         )
                         legal_moves.append(move)
         return legal_moves
+
+    def serialize(self) -> str:
+        """Serialize the board from top row (y=0) to bottom (y=height-1)."""
+
+        rows: List[str] = []
+        for y in range(self.height):
+            row: List[str] = []
+            for x in range(self.width):
+                piece = self.get_piece_at(x, y)
+                row.append(piece.type.value if piece else ".")
+            rows.append("".join(row))
+        return "/".join(rows)
+
+    @classmethod
+    def deserialize(cls, data: str) -> "Board":
+        """Create a board from serialized rows produced by serialize()."""
+
+        board = cls()
+        board.pieces = {}
+        board.current_player = Player.BUFFALO
+
+        rows = data.split("/")
+        if len(rows) != board.height:
+            raise ValueError("Serialized board has an unexpected number of rows.")
+
+        for y, row in enumerate(rows):
+            if len(row) != board.width:
+                raise ValueError("Serialized board has an unexpected row width.")
+            for x, char in enumerate(row):
+                if char == ".":
+                    continue
+                try:
+                    piece_type = PieceType(char)
+                except ValueError as exc:
+                    raise ValueError(f"Unknown piece token: {char}") from exc
+                player = (
+                    Player.BUFFALO
+                    if piece_type == PieceType.BUFFALO
+                    else Player.HUNTERS
+                )
+                board.pieces[(x, y)] = Piece(piece_type, player)
+        return board

@@ -10,7 +10,7 @@ from typing import Optional
 
 import click
 
-from .game import Game, MoveRecord, csv_fields, record_to_row, serialize_board
+from .game import Game, MoveRecord, csv_fields, record_to_row
 
 
 @dataclass(frozen=True)
@@ -33,8 +33,8 @@ class RandomMoveController:
 class RandomGameSimulator:
     """Generate random games and export move logs to CSV files."""
 
-    def __init__(self, rng: Optional[random.Random] = None) -> None:
-        self.rng = rng or random.Random()
+    def __init__(self, seed: Optional[random.Random] = None) -> None:
+        self.seed = seed or random.Random()
 
     def generate_games(
         self,
@@ -70,7 +70,7 @@ class RandomGameSimulator:
         if game.game_over:
             return
 
-        board_state = serialize_board(game.board)
+        board_state = game.board.serialize()
         record = MoveRecord(
             move_number=game.move_number,
             player=game.board.current_player,
@@ -102,8 +102,8 @@ def main(
     max_moves: int,
     seed: Optional[int],
 ) -> None:
-    rng = random.Random(seed)
-    simulator = RandomGameSimulator(rng=rng)
+    seed = random.Random(seed)
+    simulator = RandomGameSimulator(seed=seed)
     simulator.generate_games(
         num_games=num_games,
         output_dir=output_dir,

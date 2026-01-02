@@ -5,6 +5,8 @@ from typing import Any, List, Optional
 from .board import Board, Move, Player
 
 
+
+
 class Bot(ABC):
     def __init__(self, board: Board, player: Player) -> None:
         self.board = board
@@ -23,39 +25,23 @@ class Bot(ABC):
         """Select a legal move for the bot's player without mutating the board."""
         raise NotImplementedError
 
-    def make_move(self) -> bool:
-        """Make a move for the bot's player. Returns True if a move was made, False otherwise."""
-        move = self.choose_move()
-        if move is None:
-            return False
-        from_pos, to_pos = move
-        return self.board.move_piece(from_pos.x, from_pos.y, to_pos.x, to_pos.y)
+    def _choose_random_legal_move(self, game: Optional[Any] = None) -> Optional[Move]:
+        legal_moves = self.generate_legal_moves()
+        if not legal_moves:
+            return None
+        return random.choice(legal_moves)
+
 
 class NaiveBuffalo(Bot):
     def __init__(self, board: Board) -> None:
         super().__init__(board, Player.BUFFALO)
 
     def choose_move(self, game: Optional[Any] = None) -> Optional[Move]:
-        legal_moves = self.generate_legal_moves()
-        if not legal_moves:
-            return None
-        return random.choice(legal_moves)
+        return self._choose_random_legal_move()
 
 class NaiveHunter(Bot):
     def __init__(self, board: Board) -> None:
         super().__init__(board, Player.HUNTERS)
 
     def choose_move(self, game: Optional[Any] = None) -> Optional[Move]:
-        legal_moves = self.generate_legal_moves()
-        one_step_moves = [
-            move
-            for move in legal_moves
-            if max(
-                abs(move.end.x - move.start.x),
-                abs(move.end.y - move.start.y),
-            )
-            == 1
-        ]
-        if not one_step_moves:
-            return None
-        return random.choice(one_step_moves)
+        return self._choose_random_legal_move()
