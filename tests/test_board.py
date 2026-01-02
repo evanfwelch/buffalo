@@ -73,17 +73,18 @@ def test_hunters_win_when_buffalo_no_moves():
 @pytest.mark.parametrize(
     ("piece_type", "player", "start", "end", "expected"),
     [
-        (PieceType.BUFFALO, Player.BUFFALO, (5, 0), (5, 1), True),
-        (PieceType.BUFFALO, Player.BUFFALO, (5, 0), (5, 2), False),
-        (PieceType.BUFFALO, Player.BUFFALO, (5, 0), (6, 1), False),
-        (PieceType.CHIEF, Player.HUNTERS, (5, 5), (6, 6), True),
-        (PieceType.CHIEF, Player.HUNTERS, (5, 5), (7, 6), False),
-        (PieceType.CHIEF, Player.HUNTERS, (5, 5), (5, 6), False),
+        (PieceType.BUFFALO, Player.BUFFALO, (5, 0), (5, 1), True),   # can move down by 1step
+        (PieceType.BUFFALO, Player.BUFFALO, (5, 0), (5, 2), False),  # cant move by 2 steps
+        (PieceType.BUFFALO, Player.BUFFALO, (5, 0), (6, 1), False),  # cant move diagonally
+        (PieceType.BUFFALO, Player.BUFFALO, (5, 1), (5, 0), False),  # buffalo cant move backward
+        (PieceType.BUFFALO, Player.BUFFALO, (5, 5), (5, 6), True),  # only buffalo can cross to bottom rank for a win
+        (PieceType.CHIEF, Player.HUNTERS, (5, 5), (6, 4), True),  # can move diagonally by 1
+        (PieceType.CHIEF, Player.HUNTERS, (5, 5), (7, 6), False),  # cant move by 2 spaces
+        (PieceType.CHIEF, Player.HUNTERS, (5, 5), (5, 6), False),  # cannot move to bottom rank
         (PieceType.DOG, Player.HUNTERS, (5, 5), (5, 4), True),
-        (PieceType.DOG, Player.HUNTERS, (5, 5), (7, 5), True),
-        (PieceType.DOG, Player.HUNTERS, (5, 5), (7, 6), True),
-        (PieceType.DOG, Player.HUNTERS, (5, 5), (6, 4), False),
-        (PieceType.DOG, Player.HUNTERS, (5, 5), (5, 0), False),
+        (PieceType.DOG, Player.HUNTERS, (5, 5), (7, 5), True),  
+        (PieceType.DOG, Player.HUNTERS, (5, 5), (7, 6), False),  # cannot move to bottom rank
+        (PieceType.DOG, Player.HUNTERS, (5, 5), (6, 4), True),
         (PieceType.DOG, Player.HUNTERS, (5, 5), (5, 5), False),
     ],
 )
