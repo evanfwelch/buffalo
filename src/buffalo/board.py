@@ -59,6 +59,39 @@ class MoveRecord:
     board_after: str
     move_result: MoveResult
 
+    def to_row(self) -> dict:
+        return {
+            "move_number": self.move_number,
+            "player": self.player,
+            "piece_type": self.piece_type,
+            "from_x": self.from_pos.x,
+            "from_y": self.from_pos.y,
+            "to_x": self.to_pos.x,
+            "to_y": self.to_pos.y,
+            "captured_piece": self.move_result.captured_piece,
+            "winner_after_move": self.move_result.winner_after_move,
+            "game_over_reason": self.move_result.game_over_reason,
+            "board_before": self.board_before,
+            "board_after": self.board_after,
+        }
+
+    @classmethod
+    def csv_fields(cls) -> List[str]:
+        return [
+            "move_number",
+            "player",
+            "piece_type",
+            "from_x",
+            "from_y",
+            "to_x",
+            "to_y",
+            "captured_piece",
+            "winner_after_move",
+            "game_over_reason",
+            "board_before",
+            "board_after",
+        ]
+
 
 class Board:
     width: int = 11
