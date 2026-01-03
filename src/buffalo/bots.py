@@ -75,13 +75,18 @@ class TorchBuffalo(Bot):
         self.dqn = BuffaloQNetwork(state_size, action_size)
         torch_device = torch.device(device) if device else None
         if model_path is not None:
+            print(f"Loading model from {model_path}")
             payload = torch.load(model_path, map_location=torch_device or "cpu")
             self.dqn.load_state_dict(payload["state_dict"])
         if torch_device:
             self.dqn.to(torch_device)
 
-    def get_buffalo_input_dim(self) -> int:
-        return self.board_state_encoder.state_size + self.board_state_encoder.buffalo_action_size
+    def load_model(self, model_path: str, device: Optional[str] = None) -> None:
+        torch_device = torch.device(device) if device else None
+        payload = torch.load(model_path, map_location=torch_device or "cpu")
+        self.dqn.load_state_dict(payload["state_dict"])
+        if torch_device:
+            self.dqn.to(torch_device)
 
     def choose_move(
         self,
@@ -118,3 +123,12 @@ class TorchBuffalo(Bot):
             encoded_board_state,
             encoded_legal_moves,
         )
+
+class TrainedTorchBuffalo(TorchBuffalo):
+    def __init__(
+        self,
+        board: Board,
+        model_path: Optional[str] = None,
+        device: Optional[str] = None,
+    ) -> None:
+        super().__init__(board, model_path='trained_models', device='cpu')
