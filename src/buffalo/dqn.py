@@ -8,58 +8,14 @@ from __future__ import annotations
 
 from collections import deque
 from dataclasses import dataclass
-from typing import Deque, Iterable, List, NamedTuple, Optional, Sequence, Tuple
+from typing import Deque, Iterable, NamedTuple, Optional, Tuple
 import random
 
 import torch
 from torch import nn
 from torch.utils.data import IterableDataset
 
-from .board import Board, PieceType, Player
-
-
-class BoardStateEncoder:
-    """Encode a :class:`Board` into a flattened one-hot tensor.
-
-    Each board square is represented by a one-hot encoding of the piece type
-    occupying that square. The encoding ignores empty squares and flattens the
-    representation into a single vector of length
-    ``board.width * board.height * num_piece_types``.
-    """
-
-    def __init__(self, board_width: int = 11, board_height: int = 7):
-        self.board_width = board_width
-        self.board_height = board_height
-        self.piece_types: Sequence[PieceType] = [
-            PieceType.BUFFALO,
-            PieceType.DOG,
-            PieceType.CHIEF,
-        ]
-        # +1 for player turn state
-        self.state_size = board_width * board_height * len(self.piece_types) + 1
-
-    def encode_player_turn(self, player: Player) -> torch.Tensor:
-        """Return a one-hot encoded representation of the current player."""
-        encoding = torch.zeros(len(Player), dtype=torch.float32)
-        encoding[player.value] = 1.0
-        return encoding
-
-    def encode(self, board: Board) -> torch.Tensor:
-        """Return a one-hot encoded representation of ``board``.
-
-        Parameters
-        ----------
-        board:
-            Board instance to encode.
-        """
-        state = torch.zeros(self.state_size, dtype=torch.float32)
-        for (x, y), piece in board.pieces.items():
-            square_index = y * self.board_width + x
-            type_index = self.piece_types.index(piece.type)
-            index = square_index * len(self.piece_types) + type_index
-            state[index] = 1.0
-        state[-1] = 1.0 if board.current_player == Player.HUNTERS else 0.0
-        return state
+from .board import Board, Player
 
 
 class QNetwork(nn.Module):

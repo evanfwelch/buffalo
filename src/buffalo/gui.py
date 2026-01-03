@@ -1,3 +1,4 @@
+import importlib
 import logging
 from typing import Optional, Tuple
 
@@ -67,6 +68,7 @@ def to_board_position(screen_x: float, screen_y: float) -> Tuple[int, int]:
 class GameWindow(arcade.Window):
     def __init__(
         self,
+        game: Game,
         max_frames: Optional[int] = None,
         buffalo_strategy: Optional[str] = None,
         hunter_strategy: Optional[str] = None,
@@ -75,15 +77,8 @@ class GameWindow(arcade.Window):
         window_width = BOARD_PIXEL_WIDTH + (PANEL_WIDTH if show_logs else 0)
         super().__init__(window_width, HEIGHT, "Buffalo!")
         self.selected_pos: Optional[Tuple[int, int]] = None
-        self.buffalo_strategy = buffalo_strategy
-        self.hunter_strategy = hunter_strategy
         self.show_logs = show_logs
-        board = Board()
-        self.game = Game(
-            board=board,
-            buffalo_controller=self._controller_for_strategy(board, Player.BUFFALO),
-            hunter_controller=self._controller_for_strategy(board, Player.HUNTERS),
-        )
+        self.game = game
         self.started = False
         self.frame = 0
         self.max_frames = max_frames
@@ -251,13 +246,13 @@ class GameWindow(arcade.Window):
 @click.option(
     "--buffalo-strategy",
     type=str,
-    default="naive",
+    default="NaiveBuffalo",
     help="Strategy for the buffalo player (e.g., 'naive')",
 )
 @click.option(
     "--hunter-strategy",
     type=str,
-    default="naive",
+    default="NaiveHunter",
     help="Strategy for the hunter player (e.g., 'naive')",
 )
 @click.option("--show-logs", is_flag=True, help="Show move history sidebar.")
@@ -267,10 +262,25 @@ def main(
     hunter_strategy: str = None,
     show_logs: bool = False,
 ) -> None:
+
+    # create board
+    board = Board()
+
+    # create bots
+    bots_module = importlib.import_module("buffalo.bots")
+    buffalo_bot_clazz = getattr(bots_module, buffalo_strategy)
+    hunter_bot_clazz = getattr(bots_module, hunter_strategy)
+
+    buffalo_bot = buffalo_bot_clazz(board)
+    hunter_bot = hunter_bot_clazz(board)
+
+    # create game
+    game = Game(buffalo_bot, hunter_bot, board)
+
+    #
     GameWindow(
+        game=game,
         max_frames=max_frames,
-        buffalo_strategy=buffalo_strategy,
-        hunter_strategy=hunter_strategy,
         show_logs=show_logs,
     )
     arcade.run()
