@@ -124,6 +124,7 @@ class TorchBuffalo(Bot):
             encoded_legal_moves,
         )
 
+
 class TrainedTorchBuffalo(TorchBuffalo):
     def __init__(
         self,
@@ -131,4 +132,4 @@ class TrainedTorchBuffalo(TorchBuffalo):
         model_path: Optional[str] = None,
         device: Optional[str] = None,
     ) -> None:
-        super().__init__(board, model_path='trained_models', device='cpu')
+        super().__init__(board, model_path="trained_models", device="cpu")
