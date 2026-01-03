@@ -59,21 +59,11 @@ class BoardStateEncoder:
     ) -> torch.Tensor:
         """Return a joint representation of the buffalo's state and action space."""
 
-        n_moves, buffalo_dim = encoded_buffalo_moves.shape
-
-        board_state_dim = encoded_board_state.size(0)
-
         assert len(encoded_board_state.shape) == 1
 
-        expanded_state = encoded_board_state.unsqueeze(0).expand(
-            n_moves,
-            -1,
-        )
+        n_moves = encoded_buffalo_moves.size(0)
+        expanded_state = encoded_board_state.unsqueeze(0).expand(n_moves, -1)
         return torch.cat([expanded_state, encoded_buffalo_moves], dim=1)
-
-    @property
-    def buffalo_action_size(self):
-        return self.board_width
 
     @property
     def buffalo_action_size(self) -> int:

@@ -2,8 +2,10 @@ import random
 from abc import ABC, abstractmethod
 from typing import Any, List, Optional
 
-from buffalo.encoders import BoardStateEncoder
 import torch
+
+from buffalo.encoders import BoardStateEncoder
+from buffalo.models import BuffaloQNetwork
 
 from .board import Board, Move, Player
 
@@ -59,17 +61,24 @@ class NaiveHunter(Bot):
 
 
 class TorchBuffalo(Bot):
-
-    def __init__(self, board: Board) -> None:
+    def __init__(
+        self,
+        board: Board,
+        model_path: Optional[str] = None,
+        device: Optional[str] = None,
+    ) -> None:
         super().__init__(board, Player.BUFFALO)
         self.board_state_encoder = BoardStateEncoder()
 
         state_size = self.board_state_encoder.state_size
         action_size = self.board_state_encoder.buffalo_action_size
-
-        self.dqn = torch.nn.Sequential(
-            torch.nn.Linear(state_size + action_size, 128), torch.nn.ReLU(), torch.nn.Linear(128, 1), torch.nn.Tanh()
-        )
+        self.dqn = BuffaloQNetwork(state_size, action_size)
+        torch_device = torch.device(device) if device else None
+        if model_path is not None:
+            payload = torch.load(model_path, map_location=torch_device or "cpu")
+            self.dqn.load_state_dict(payload["state_dict"])
+        if torch_device:
+            self.dqn.to(torch_device)
 
     def get_buffalo_input_dim(self) -> int:
         return self.board_state_encoder.state_size + self.board_state_encoder.buffalo_action_size
@@ -79,9 +88,11 @@ class TorchBuffalo(Bot):
     ) -> Optional[Move]:
 
         legal_moves = self.generate_legal_moves()
+        encoded_state = self.board_state_encoder.encode(self.board)
+        encoded_actions = self.board_state_encoder.buffalo_move_one_hot_encoder(legal_moves)
         encoded_state_action_space = self.board_state_encoder.buffalo_joint_state_action_encoder(
-            self.board_state_encoder.encode(self.board),
-            self.board_state_encoder.buffalo_move_one_hot_encoder(legal_moves),
+            encoded_state,
+            encoded_actions,
         )
 
         assert len(legal_moves) == encoded_state_action_space.shape[0]
@@ -95,8 +106,7 @@ class TorchBuffalo(Bot):
         return legal_moves[chosen_move_idx]
 
     def encode_board_state(self) -> torch.Tensor:
-        # Encode the board state as a tensor
-        return self.board.encode()
+        return self.board_state_encoder.encode(self.board)
 
     def encode_state_action_(self) -> torch.Tensor:
         legal_moves = self.generate_legal_moves()
@@ -104,4 +114,7 @@ class TorchBuffalo(Bot):
         encoded_legal_moves = self.board_state_encoder.buffalo_move_one_hot_encoder(legal_moves)
         encoded_board_state = self.encode_board_state()
 
-        return torch.cat([encoded_board_state, encoded_legal_moves], dim=-1)
+        return self.board_state_encoder.buffalo_joint_state_action_encoder(
+            encoded_board_state,
+            encoded_legal_moves,
+        )
