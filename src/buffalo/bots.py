@@ -93,11 +93,9 @@ class TorchBuffalo(Bot):
     ) -> Optional[Move]:
 
         legal_moves = self.generate_legal_moves()
-        encoded_state = self.board_state_encoder.encode(self.board)
-        encoded_actions = self.board_state_encoder.buffalo_move_one_hot_encoder(legal_moves)
-        encoded_state_action_space = self.board_state_encoder.buffalo_joint_state_action_encoder(
-            encoded_state,
-            encoded_actions,
+        encoded_state_action_space = self.board_state_encoder.joint_state_action_encoder(
+            self.board,
+            legal_moves,
         )
 
         assert len(legal_moves) == encoded_state_action_space.shape[0]
@@ -116,12 +114,9 @@ class TorchBuffalo(Bot):
     def encode_state_action_(self) -> torch.Tensor:
         legal_moves = self.generate_legal_moves()
 
-        encoded_legal_moves = self.board_state_encoder.buffalo_move_one_hot_encoder(legal_moves)
-        encoded_board_state = self.encode_board_state()
-
-        return self.board_state_encoder.buffalo_joint_state_action_encoder(
-            encoded_board_state,
-            encoded_legal_moves,
+        return self.board_state_encoder.joint_state_action_encoder(
+            self.board,
+            legal_moves,
         )
 
 

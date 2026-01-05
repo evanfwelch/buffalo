@@ -5,15 +5,7 @@ from typing import Optional, Tuple
 import arcade
 import click
 
-from .board import (
-    Board,
-    MoveResult,
-    PieceType,
-    Player,
-    Position,
-    MoveRecord,
-    MoveResult,
-)
+from .board import Board, GameOverReason, PieceType, Player
 from .bots import NaiveBuffalo, NaiveHunter
 from .game import Game
 
@@ -113,9 +105,9 @@ class GameWindow(arcade.Window):
         if self.bot_elapsed < self.bot_delay:
             return
         self.bot_elapsed = 0.0
-        move_result, move_record = self.game.step()
+        captured_piece, winner_after_move, game_over_reason, move_record = self.game.step()
 
-        self._maybe_end_game(move_result)
+        self._maybe_end_game(winner_after_move, game_over_reason)
 
     def on_mouse_press(self, x: float, y: float, button: int, modifiers: int) -> None:
         # start the game upon first click
@@ -170,7 +162,9 @@ class GameWindow(arcade.Window):
             self._history_count = len(self.game.history)
             recent = self.game.history[-PANEL_MAX_LINES:]
             self._history_cache = [
-                f"{record.move_number:03d} {record.player.name} {record.board_after}" for record in recent
+                f"{record.move_number:03d} {record.player.name} "
+                f"{Board.from_pieces(record.pieces_after, Player.BUFFALO).serialize()}"
+                for record in recent
             ]
 
         text_y = header_y - (PANEL_LINE_HEIGHT * 1.6)
@@ -226,12 +220,15 @@ class GameWindow(arcade.Window):
             return NaiveHunter(board)
         return None
 
-    def _maybe_end_game(self, move_result: MoveResult) -> None:
-        if move_result.winner_after_move is not None:
+    def _maybe_end_game(
+        self,
+        winner_after_move: Optional[Player],
+        game_over_reason: Optional[GameOverReason],
+    ) -> None:
+        if winner_after_move is not None:
             self.started = False
-            self.set_caption(
-                f"YEEHAW: {move_result.winner_after_move.name} wins! Reason = {move_result.game_over_reason}"
-            )
+            reason = game_over_reason.name if game_over_reason else "unknown"
+            self.set_caption(f"YEEHAW: {winner_after_move.name} wins! Reason = {reason}")
         return None
 
 

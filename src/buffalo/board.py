@@ -1,6 +1,10 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 from enum import Enum
-from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
+
+from dataclasses_json import config, dataclass_json
 
 
 class Player(Enum):
@@ -41,58 +45,6 @@ class GameOverReason(Enum):
     BUFFALO_EXTINCT = "buffalo_extinct"
 
 
-@dataclass
-class MoveResult:
-    captured_piece: Optional[Piece]
-    winner_after_move: Optional[Player]
-    game_over_reason: Optional[GameOverReason]
-
-
-@dataclass(frozen=True)
-class MoveRecord:
-    move_number: int
-    player: Player
-    piece_type: Optional[PieceType]
-    from_pos: Optional[Position]
-    to_pos: Optional[Position]
-    board_before: str
-    board_after: str
-    move_result: MoveResult
-
-    def to_row(self) -> dict:
-        return {
-            "move_number": self.move_number,
-            "player": self.player,
-            "piece_type": self.piece_type,
-            "from_x": self.from_pos.x,
-            "from_y": self.from_pos.y,
-            "to_x": self.to_pos.x,
-            "to_y": self.to_pos.y,
-            "captured_piece": self.move_result.captured_piece,
-            "winner_after_move": self.move_result.winner_after_move,
-            "game_over_reason": self.move_result.game_over_reason,
-            "board_before": self.board_before,
-            "board_after": self.board_after,
-        }
-
-    @classmethod
-    def csv_fields(cls) -> List[str]:
-        return [
-            "move_number",
-            "player",
-            "piece_type",
-            "from_x",
-            "from_y",
-            "to_x",
-            "to_y",
-            "captured_piece",
-            "winner_after_move",
-            "game_over_reason",
-            "board_before",
-            "board_after",
-        ]
-
-
 class Board:
     width: int = 11
     height: int = 7
@@ -117,6 +69,20 @@ class Board:
 
         # Place chief at center bottom
         self.pieces[(self._INITIAL_KING_FILE, self.height - 2)] = Piece(PieceType.CHIEF, Player.HUNTERS)
+
+    @staticmethod
+    def _copy_pieces(pieces: Dict[Tuple[int, int], Piece]) -> Dict[Tuple[int, int], Piece]:
+        return {
+            (x, y): Piece(piece.type, piece.player)
+            for (x, y), piece in pieces.items()
+        }
+
+    @classmethod
+    def from_pieces(cls, pieces: Dict[Tuple[int, int], Piece], current_player: Player) -> "Board":
+        board = cls()
+        board.pieces = cls._copy_pieces(pieces)
+        board.current_player = current_player
+        return board
 
     def get_piece_at(self, x: int, y: int) -> Optional[Piece]:
         return self.pieces.get((x, y))
@@ -226,8 +192,13 @@ class Board:
         return None, None
 
     def move_piece(
-        self, from_x: int, from_y: int, to_x: int, to_y: int, with_record: bool = True
-    ) -> Tuple[MoveResult, Optional[MoveRecord]]:
+        self,
+        from_x: int,
+        from_y: int,
+        to_x: int,
+        to_y: int,
+        with_record: bool = True,
+    ) -> Tuple[Optional[PieceType], Optional[Player], Optional[GameOverReason], Optional["MoveRecord"]]:
         piece = self.get_piece_at(from_x, from_y)
         if not piece:
             raise ValueError("No piece at the starting position")
@@ -241,13 +212,13 @@ class Board:
         captured_piece = self.get_piece_at(to_x, to_y)
 
         if with_record:
-            board_before: str = self.serialize()
+            pieces_before = self._copy_pieces(self.pieces)
 
         self.pieces[(to_x, to_y)] = piece
         del self.pieces[(from_x, from_y)]
 
         if with_record:
-            board_after: str = self.serialize()
+            pieces_after = self._copy_pieces(self.pieces)
 
         # increment move number
         self.move_number += 1
@@ -258,12 +229,6 @@ class Board:
         # check for winner
         winning_player, reason = self.check_for_winner()
 
-        move_result = MoveResult(
-            captured_piece=captured_piece,
-            winner_after_move=winning_player,
-            game_over_reason=reason,
-        )
-
         if with_record:
             move_record = MoveRecord(
                 move_number=self.move_number,
@@ -271,12 +236,24 @@ class Board:
                 piece_type=piece.type,
                 from_pos=Position(from_x, from_y),
                 to_pos=Position(to_x, to_y),
-                board_before=board_before,
-                board_after=board_after,
-                move_result=move_result,
+                pieces_before=pieces_before,
+                pieces_after=pieces_after,
+                captured_piece=captured_piece.type if captured_piece else None,
+                winner_after_move=winning_player,
+                game_over_reason=reason,
             )
-            return move_result, move_record
-        return move_result, None
+            return (
+                captured_piece.type if captured_piece else None,
+                winning_player,
+                reason,
+                move_record,
+            )
+        return (
+            captured_piece.type if captured_piece else None,
+            winning_player,
+            reason,
+            None,
+        )
 
     def legal_moves(self) -> List[Move]:
         """Return legal moves for the current player without mutating the board."""
@@ -334,3 +311,76 @@ class Board:
                 player = Player.BUFFALO if piece_type == PieceType.BUFFALO else Player.HUNTERS
                 board.pieces[(x, y)] = Piece(piece_type, player)
         return board
+
+
+@dataclass_json
+@dataclass(frozen=True)
+class MoveRecord:
+    move_number: int
+    from_pos: Position
+    to_pos: Position
+    player: Player = field(
+        metadata=config(encoder=lambda e: e.name, decoder=lambda v: Player[v])
+    )
+    piece_type: PieceType = field(
+        metadata=config(encoder=lambda e: e.name, decoder=lambda v: PieceType[v])
+    )
+    pieces_before: Dict[Tuple[int, int], Piece] = field(
+        metadata=config(
+            encoder=lambda pieces: [
+                {
+                    "pos": [x, y],
+                    "piece_type": piece.type.name,
+                    "player": piece.player.name,
+                }
+                for (x, y), piece in pieces.items()
+            ],
+            decoder=lambda items: {
+                (item["pos"][0], item["pos"][1]): Piece(
+                    PieceType[item["piece_type"]],
+                    Player[item["player"]],
+                )
+                for item in items
+            },
+        )
+    )
+    pieces_after: Dict[Tuple[int, int], Piece] = field(
+        metadata=config(
+            encoder=lambda pieces: [
+                {
+                    "pos": [x, y],
+                    "piece_type": piece.type.name,
+                    "player": piece.player.name,
+                }
+                for (x, y), piece in pieces.items()
+            ],
+            decoder=lambda items: {
+                (item["pos"][0], item["pos"][1]): Piece(
+                    PieceType[item["piece_type"]],
+                    Player[item["player"]],
+                )
+                for item in items
+            },
+        )
+    )
+    captured_piece: Optional[PieceType] = field(
+        default=None,
+        metadata=config(
+            encoder=lambda e: e.name if e else None,
+            decoder=lambda v: PieceType[v] if v is not None else None,
+        ),
+    )
+    winner_after_move: Optional[Player] = field(
+        default=None,
+        metadata=config(
+            encoder=lambda e: e.name if e else None,
+            decoder=lambda v: Player[v] if v is not None else None,
+        ),
+    )
+    game_over_reason: Optional[GameOverReason] = field(
+        default=None,
+        metadata=config(
+            encoder=lambda e: e.name if e else None,
+            decoder=lambda v: GameOverReason[v] if v is not None else None,
+        ),
+    )

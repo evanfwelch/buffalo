@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import os
 import random
 from dataclasses import dataclass
@@ -55,7 +54,7 @@ def main(
             print(f"Game {i_game} reached max moves of {max_moves} without a winner, skipping for now.")
 
         # TODO: log the game in the desired subfolder
-        game_filename: str = f"game-{i_game:09d}.csv"
+        game_filename: str = f"game-{i_game:09d}.jsonl"
         game_folder: str = os.path.join(output_dir, simulation_name)
         os.makedirs(game_folder, exist_ok=True)
         game_path: str = os.path.join(game_folder, game_filename)

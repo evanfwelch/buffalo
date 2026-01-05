@@ -1,8 +1,6 @@
-import csv
-
 import torch
 
-from buffalo.board import Board, MoveRecord
+from buffalo.board import Board, MoveRecord, PieceType, Player, Position
 from buffalo.dataloader import HunterGameDataset
 
 
@@ -15,57 +13,53 @@ def test_hunter_dataloader_encodes_action(tmp_path):
     board.move_piece(1, 0, 1, 1)
     board_after_buffalo_two = board.serialize()
 
-    rows = [
-        {
-            "move_number": "1",
-            "player": "Player.BUFFALO",
-            "piece_type": "PieceType.BUFFALO",
-            "from_x": "0",
-            "from_y": "0",
-            "to_x": "0",
-            "to_y": "1",
-            "captured_piece": "",
-            "winner_after_move": "",
-            "game_over_reason": "",
-            "board_before": Board().serialize(),
-            "board_after": board_after_buffalo,
-        },
-        {
-            "move_number": "2",
-            "player": "Player.HUNTERS",
-            "piece_type": "PieceType.CHIEF",
-            "from_x": "5",
-            "from_y": "5",
-            "to_x": "5",
-            "to_y": "4",
-            "captured_piece": "",
-            "winner_after_move": "",
-            "game_over_reason": "",
-            "board_before": board_after_buffalo,
-            "board_after": board_after_hunter,
-        },
-        {
-            "move_number": "3",
-            "player": "Player.BUFFALO",
-            "piece_type": "PieceType.BUFFALO",
-            "from_x": "1",
-            "from_y": "0",
-            "to_x": "1",
-            "to_y": "1",
-            "captured_piece": "",
-            "winner_after_move": "",
-            "game_over_reason": "",
-            "board_before": board_after_hunter,
-            "board_after": board_after_buffalo_two,
-        },
+    def snapshot_pieces(board: Board):
+        return {(x, y): piece for (x, y), piece in board.pieces.items()}
+
+    lines = [
+        MoveRecord(
+            move_number=1,
+            player=Player.BUFFALO,
+            piece_type=PieceType.BUFFALO,
+            from_pos=Position(0, 0),
+            to_pos=Position(0, 1),
+            pieces_before=snapshot_pieces(Board()),
+            pieces_after=snapshot_pieces(Board.deserialize(board_after_buffalo)),
+            captured_piece=None,
+            winner_after_move=None,
+            game_over_reason=None,
+        ).to_json(),
+        MoveRecord(
+            move_number=2,
+            player=Player.HUNTERS,
+            piece_type=PieceType.CHIEF,
+            from_pos=Position(5, 5),
+            to_pos=Position(5, 4),
+            pieces_before=snapshot_pieces(Board.deserialize(board_after_buffalo)),
+            pieces_after=snapshot_pieces(Board.deserialize(board_after_hunter)),
+            captured_piece=None,
+            winner_after_move=None,
+            game_over_reason=None,
+        ).to_json(),
+        MoveRecord(
+            move_number=3,
+            player=Player.BUFFALO,
+            piece_type=PieceType.BUFFALO,
+            from_pos=Position(1, 0),
+            to_pos=Position(1, 1),
+            pieces_before=snapshot_pieces(Board.deserialize(board_after_hunter)),
+            pieces_after=snapshot_pieces(Board.deserialize(board_after_buffalo_two)),
+            captured_piece=None,
+            winner_after_move=None,
+            game_over_reason=None,
+        ).to_json(),
     ]
 
-    csv_path = tmp_path / "game-1.csv"
-    with csv_path.open("w", newline="", encoding="utf-8") as handle:
-        writer = csv.DictWriter(handle, fieldnames=MoveRecord.csv_fields())
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
+    jsonl_path = tmp_path / "game-1.jsonl"
+    with jsonl_path.open("w", encoding="utf-8") as handle:
+        for line in lines:
+            handle.write(line)
+            handle.write("\n")
 
     dataset = HunterGameDataset(tmp_path)
     samples = list(dataset)

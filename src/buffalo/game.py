@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Iterable, List, Optional, Protocol, Tuple
-import csv
 
-from .board import Board, GameOverReason, Move, PieceType, Player, Position, MoveResult, MoveRecord
+from .board import Board, GameOverReason, Move, PieceType, Player, Position, MoveRecord
 
 
 class PlayerController(Protocol):
@@ -49,12 +48,16 @@ class Game:
             return self.buffalo_controller
         return self.hunter_controller
 
-    def _maybe_conclude_game(self, move_result: MoveResult) -> None:
-        if move_result.winner_after_move is not None:
-            self.winner = move_result.winner_after_move
-            self.game_over_reason = move_result.game_over_reason
+    def _maybe_conclude_game(
+        self,
+        winner_after_move: Optional[Player],
+        game_over_reason: Optional[GameOverReason],
+    ) -> None:
+        if winner_after_move is not None:
+            self.winner = winner_after_move
+            self.game_over_reason = game_over_reason
 
-    def step(self) -> Tuple[MoveResult, Optional[MoveRecord]]:
+    def step(self) -> Tuple[Optional[PieceType], Optional[Player], Optional[GameOverReason], Optional[MoveRecord]]:
         """Advance the game using the configured controller for the current player."""
 
         if self.game_over:
@@ -67,16 +70,19 @@ class Game:
         if move is None:
             assert move is not None, "Controller must choose a valid move."
 
-        move_result, move_record = self.board.move_piece(move.start.x, move.start.y, move.end.x, move.end.y)
+        captured_piece, winner_after_move, game_over_reason, move_record = self.board.move_piece(
+            move.start.x,
+            move.start.y,
+            move.end.x,
+            move.end.y,
+        )
         self.history.append(move_record)
-        self._maybe_conclude_game(move_result)
+        self._maybe_conclude_game(winner_after_move, game_over_reason)
 
-        return move_result, move_record
+        return captured_piece, winner_after_move, game_over_reason, move_record
 
     def write_history(self, game_path: str):
-        with open(game_path, "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=MoveRecord.csv_fields())
-            writer.writeheader()
-
+        with open(game_path, "w", encoding="utf-8") as handle:
             for record in self.history:
-                writer.writerow(record.to_row())
+                handle.write(record.to_json())
+                handle.write("\n")
